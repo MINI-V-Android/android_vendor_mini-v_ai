@@ -1,0 +1,13 @@
+# Domain for ai_daemon process
+type miniv_ai, domain;
+type miniv_ai_exec, exec_type, vendor_file_type, file_type;
+
+# Set up the init -> miniv_ai domain transition
+init_daemon_domain(miniv_ai)
+
+# Type for the UDS socket file under /dev/socket/
+type miniv_ai_socket, file_type, coredomain_socket;
+
+# === Permissive during early development ===
+# Remove this line once all required allows are derived from audit logs.
+permissive miniv_ai;
