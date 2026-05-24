@@ -1,0 +1,2 @@
+/vendor/bin/ai_daemon      u:object_r:miniv_ai_exec:s0
+/dev/socket/miniv_ai       u:object_r:miniv_ai_socket:s0

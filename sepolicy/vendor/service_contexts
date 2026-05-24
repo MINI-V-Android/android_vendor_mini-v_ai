@@ -1,0 +1,3 @@
+# Reserved for future Binder service labels.
+# Currently empty: ai_daemon uses UDS, not Binder.
+# Future: when MINIVAIService is registered, its label goes here.
