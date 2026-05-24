@@ -11,3 +11,8 @@ type miniv_ai_socket, file_type, coredomain_socket;
 # === Permissive during early development ===
 # Remove this line once all required allows are derived from audit logs.
 permissive miniv_ai;
+
+# Allow shell user to connect to ai_daemon socket (for ai_daemon_cli)
+# TODO: Remove once development tooling is no longer needed via adb shell
+allow shell miniv_ai_socket:sock_file { write };
+allow shell miniv_ai:unix_stream_socket connectto;
