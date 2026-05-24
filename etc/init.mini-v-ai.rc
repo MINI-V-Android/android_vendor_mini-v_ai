@@ -1,0 +1,13 @@
+service miniv_ai /vendor/bin/ai_daemon
+    class hal
+    user system
+    group system
+    socket miniv_ai stream 0660 system system
+    disabled
+    seclabel u:r:miniv_ai:s0
+
+on property:vendor.miniv.ai.enabled=1
+    start miniv_ai
+
+on property:vendor.miniv.ai.enabled=0
+    stop miniv_ai
