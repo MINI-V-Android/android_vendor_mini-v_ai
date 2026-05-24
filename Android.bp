@@ -1,0 +1,22 @@
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+cc_defaults {
+    name: "miniv_ai_defaults",
+    vendor: true,
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-Wextra",
+        "-Wno-unused-parameter",
+    ],
+    cppflags: [
+        "-std=c++20",
+    ],
+    shared_libs: [
+        "libbase",
+        "liblog",
+        "libcutils",
+    ],
+}

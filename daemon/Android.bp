@@ -1,0 +1,12 @@
+cc_binary {
+    name: "ai_daemon",
+    defaults: ["miniv_ai_defaults"],
+
+    srcs: [
+        "main.cpp",
+    ],
+
+    init_rc: [
+        "../etc/init.mini-v-ai.rc",
+    ],
+}
