@@ -7,6 +7,6 @@ cc_binary {
     ],
 
     init_rc: [
-        "../etc/init.mini-v-ai.rc",
+        "etc/init.mini-v-ai.rc",
     ],
 }
