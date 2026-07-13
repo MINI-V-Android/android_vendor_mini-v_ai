@@ -4,6 +4,16 @@ cc_binary {
 
     srcs: [
         "main.cpp",
+        "src/llm_engine.cpp",
+    ],
+
+    local_include_dirs: ["include"],
+
+    static_libs: [
+        "libllama-prebuilt",
+        "libggml-prebuilt",
+        "libggml-base-prebuilt",
+        "libggml-cpu-prebuilt",
     ],
 
     init_rc: [

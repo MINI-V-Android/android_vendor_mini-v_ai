@@ -7,9 +7,13 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <string>
 
 #include <android-base/logging.h>
 #include <cutils/sockets.h>
+
+#include "llm_engine.h"
+#include "base64_util.h"
 
 namespace {
 
@@ -17,19 +21,69 @@ constexpr const char* kSocketName = "miniv_ai";
 constexpr int kBacklog = 4;
 
 std::atomic<bool> g_running{true};
+LLMEngine gEngine;
 
 void SignalHandler(int signum) {
     LOG(INFO) << "received signal " << signum << ", shutting down";
     g_running.store(false);
 }
 
-void HandleClient(int client_fd) {
-    const char* greeting = "HELLO from miniv_ai\n";
-    ssize_t n = write(client_fd, greeting, strlen(greeting));
-    if (n < 0) {
-        PLOG(WARNING) << "write failed";
+void HandleClient(int clientFd) {
+    FILE* rf = fdopen(clientFd, "r");
+    if (!rf) {
+        close(clientFd);
+        return;
     }
-    close(client_fd);
+    int dupFd = dup(clientFd);
+    FILE* wf = nullptr;
+    if (dupFd >= 0) {
+        wf = fdopen(dupFd, "w");
+    }
+    if (!wf) {
+        if (dupFd >= 0) close(dupFd);
+        fclose(rf);
+        return;
+    }
+
+    char line[4096];
+    while (fgets(line, sizeof(line), rf)) {
+        std::string cmd(line);
+
+        if (cmd.rfind("INFER ", 0) == 0) {
+            int maxTokens = atoi(cmd.c_str() + 6);
+
+            std::string prompt;
+            char promptLine[4096];
+            while (fgets(promptLine, sizeof(promptLine), rf)) {
+                if (strncmp(promptLine, "END", 3) == 0) break;
+                prompt += promptLine;
+            }
+            if (!prompt.empty() && prompt.back() == '\n') prompt.pop_back();
+
+            if (!gEngine.isReady()) {
+                fprintf(wf, "ERROR engine not ready\n");
+                fflush(wf);
+                continue;
+            }
+
+            std::atomic<bool> cancelled(false);
+            gEngine.infer(prompt, maxTokens,
+                [wf](const std::string& tok) {
+                    fprintf(wf, "TOKEN %s\n", base64Encode(tok).c_str());
+                    fflush(wf);
+                },
+                cancelled);
+
+            fprintf(wf, "DONE\n");
+            fflush(wf);
+
+        } else if (cmd.rfind("HELLO", 0) == 0) {
+            fprintf(wf, "HELLO from miniv_ai\n");
+            fflush(wf);
+        }
+    }
+    fclose(wf);
+    fclose(rf);
 }
 
 }  // namespace
@@ -37,6 +91,11 @@ void HandleClient(int client_fd) {
 int main(int argc, char** argv) {
     android::base::InitLogging(argv, &android::base::KernelLogger);
     LOG(INFO) << "ai_daemon starting";
+
+    if (!gEngine.load("/data/local/tmp/model.gguf", /*nThreads=*/4, /*nCtx=*/2048)) {
+        LOG(ERROR) << "model load failed, exiting";
+        return 1;
+    }
 
     signal(SIGTERM, SignalHandler);
     signal(SIGINT, SignalHandler);

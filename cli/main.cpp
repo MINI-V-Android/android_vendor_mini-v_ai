@@ -2,10 +2,15 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+
+#include <string>
+
+#include "base64_util.h"
 
 namespace {
 
@@ -54,7 +59,42 @@ int main(int argc, char** argv) {
     int fd = Connect();
     if (fd < 0) return 1;
 
-    int rc = ReadAndPrint(fd);
-    close(fd);
-    return rc;
+    if (argc >= 2 && strcmp(argv[1], "infer") == 0) {
+        std::string prompt = (argc >= 3) ? argv[2] : "";
+        int maxTokens = (argc >= 4) ? atoi(argv[3]) : 64;
+
+        dprintf(fd, "INFER %d\n%s\nEND\n", maxTokens, prompt.c_str());
+
+        FILE* rf = fdopen(fd, "r");
+        if (!rf) {
+            close(fd);
+            return 1;
+        }
+
+        char line[4096];
+        while (fgets(line, sizeof(line), rf)) {
+            if (strncmp(line, "TOKEN ", 6) == 0) {
+                std::string tokenLine(line + 6);
+                if (!tokenLine.empty() && tokenLine.back() == '\n') {
+                    tokenLine.pop_back();
+                }
+                std::string decoded = base64Decode(tokenLine);
+                printf("%s", decoded.c_str());
+                fflush(stdout);
+            } else if (strncmp(line, "DONE", 4) == 0) {
+                printf("\n[DONE]\n");
+                break;
+            } else if (strncmp(line, "ERROR", 5) == 0) {
+                printf("\n[ERROR] %s", line + 6);
+                break;
+            }
+        }
+        fclose(rf);
+        return 0;
+    } else {
+        dprintf(fd, "HELLO\n");
+        int rc = ReadAndPrint(fd);
+        close(fd);
+        return rc;
+    }
 }

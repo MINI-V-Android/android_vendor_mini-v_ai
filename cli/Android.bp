@@ -5,4 +5,6 @@ cc_binary {
     srcs: [
         "main.cpp",
     ],
+
+    local_include_dirs: ["../daemon/include"],
 }
