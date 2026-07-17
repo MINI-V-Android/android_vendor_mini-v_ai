@@ -14,5 +14,6 @@ permissive miniv_ai;
 
 # === Production access path (Phase 3+) ===
 # MINIVAIService running in system_server will connect to ai_daemon.
-allow system_server miniv_ai_socket:sock_file { write };
-allow system_server miniv_ai:unix_stream_socket connectto;
+# 260717 Useful - currently we don't think about selinux  policy
+#allow system_server miniv_ai_socket:sock_file { write };
+#allow system_server miniv_ai:unix_stream_socket connectto;
