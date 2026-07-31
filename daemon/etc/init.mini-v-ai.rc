@@ -7,6 +7,8 @@ service miniv_ai /vendor/bin/ai_daemon
     seclabel u:r:miniv_ai:s0
 
 on property:vendor.miniv.ai.enabled=1
+    mkdir /data/vendor/miniv_ai 0700 system system
+    mkdir /data/vendor/miniv_ai/sessions 0700 system system
     start miniv_ai
 
 on property:vendor.miniv.ai.enabled=0
