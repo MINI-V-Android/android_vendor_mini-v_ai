@@ -17,6 +17,16 @@ SessionManager::SessionManager(llama_model *model,
                                std::string swapDir)
     : mModel(model), mCtxParams(ctxParams), mSwapDir(std::move(swapDir)) {}
 
+SessionManager::~SessionManager() {
+  // HOT 세션들의 llama_context 해제. COLD 세션의 스왑 파일은 남겨둠
+  // (데몬 재시작 시 이어서 쓸 수 있게 — 필요 없으면 여기서 지워도 됨, 정책 미정)
+  for (auto &kv : mSessions) {
+    if (kv.second.state == SessionMeta::State::HOT && kv.second.ctx) {
+      llama_free(kv.second.ctx);
+    }
+  }
+}
+
 void SessionManager::setHotLimit(size_t count) {
   mHotLimit = std::max<size_t>(1, count);
   evictHotIfNeeded(-1);
