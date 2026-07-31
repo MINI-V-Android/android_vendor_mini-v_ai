@@ -31,14 +31,15 @@ std::string SessionManager::swapPathFor(int id) const {
   return mSwapDir + "/" + std::to_string(id) + ".state";
 }
 
-int SessionManager::createSession() {
-  int id = mNextId++;
+bool SessionManager::createSession(int requestedId) {
+  if (mSessions.count(requestedId))
+    return false; // 중복 방지
   SessionMeta meta;
-  meta.id = id;
+  meta.id = requestedId;
   meta.state = SessionMeta::State::COLD;
   meta.lastUsedMs = nowMs();
-  mSessions.emplace(id, std::move(meta));
-  return id;
+  mSessions.emplace(requestedId, std::move(meta));
+  return true;
 }
 
 bool SessionManager::killSession(int id) {

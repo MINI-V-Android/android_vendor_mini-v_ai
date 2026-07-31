@@ -51,9 +51,10 @@ void HandleClient(int clientFd) {
   while (fgets(line, sizeof(line), rf)) {
     std::string cmd(line);
 
-    if (cmd.rfind("CREATE_SESSION", 0) == 0) {
-      int id = gEngine.sessionManager()->createSession();
-      fprintf(wf, "SESSION %d\n", id);
+    if (cmd.rfind("CREATE_SESSION ", 0) == 0) {
+      int id = atoi(cmd.c_str() + 15);
+      bool ok = gEngine.sessionManager()->createSession(id);
+      fprintf(wf, ok ? "OK\n" : "ERROR ALREADY_EXISTS\n");
       fflush(wf);
 
     } else if (cmd.rfind("KILL_SESSION ", 0) == 0) {

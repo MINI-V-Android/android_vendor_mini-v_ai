@@ -30,10 +30,15 @@ public:
   SessionManager(llama_model *model, llama_context_params ctxParams,
                  std::string swapDir);
 
+  ~SessionManager(); // 신규 — HOT 세션들의 llama_context 정리
+
   void setHotLimit(size_t count);
   void setColdLimit(size_t bytes);
 
-  int createSession();
+  // 변경 — 프레임워크가 준 sessionId를 그대로 키로 사용 (자체 발급 안 함)
+  // 이미 존재하는 id면 false 반환
+  bool createSession(int requestedId);
+
   bool killSession(int id);
   llama_context *activateForInfer(int id);
   void recordTokens(int id, const llama_token *newTokens, size_t n);
@@ -44,7 +49,7 @@ private:
   std::string mSwapDir;
 
   std::unordered_map<int, SessionMeta> mSessions;
-  int mNextId = 1;
+  // mNextId 제거됨 — id는 이제 호출자(프레임워크)가 지정
 
   std::list<int> mHotLru;
   size_t mHotLimit = kDefaultHotLimit;

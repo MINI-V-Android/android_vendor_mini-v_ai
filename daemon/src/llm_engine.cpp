@@ -10,9 +10,9 @@
 namespace miniv::ai {
 namespace {
 
-// TODO: 이전 CPU 라운드 샘플러(temp+top_k+dist)로 교체 필요.
-// git log로 원본 구현 확인 후 이 함수를 대체할 것 — 지금은 순수 그리디(argmax)
-// 임시 구현.
+// TODO: llama_sampler_chain(top_k+top_p+temp+dist) API로 교체 예정.
+// git log 확인 결과 llm_engine.cpp 커밋이 1개뿐이라 예전 구현을 복원할 방법이
+// 없음 -> 새로 작성 필요. 지금은 순수 그리디(argmax) 임시 구현.
 llama_token sampleNext(llama_context *ctx) {
   const llama_model *model = llama_get_model(ctx);
   const llama_vocab *vocab = llama_model_get_vocab(model);
@@ -33,9 +33,9 @@ llama_token sampleNext(llama_context *ctx) {
 } // namespace
 
 LLMEngine::~LLMEngine() {
-  // mSessionManager 소멸 시 각 세션의 llama_context가 정리되지 않음 —
-  // SessionManager에 소멸자 추가해서 HOT 세션들을 순회하며 llama_free() 하는 게
-  // 안전. (현재 session_manager.cpp에는 소멸자가 없음, 별도 확인 필요)
+  // mSessionManager는 unique_ptr이라 이 소멸자 진입 시 아직 살아있음 ->
+  // SessionManager::~SessionManager()가 먼저 자동 호출되어 HOT 세션들의
+  // llama_context를 정리함 (그다음 이 소멸자 본문 실행)
   if (mModel)
     llama_model_free(mModel);
   llama_backend_free();
@@ -77,10 +77,11 @@ bool LLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens,
                       TokenCallback onToken) {
   llama_context *ctx = mSessionManager->activateForInfer(sessionId);
   if (!ctx)
-    return false;
+    return false; // main.cpp가 ERROR SESSION_NOT_FOUND로 응답
 
   const llama_vocab *vocab = llama_model_get_vocab(mModel);
 
+  // --- prefill ---
   int nPromptTokens = -llama_tokenize(vocab, prompt.c_str(), prompt.size(),
                                       nullptr, 0, true, true);
   std::vector<llama_token> promptTokens(nPromptTokens);
@@ -94,6 +95,7 @@ bool LLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens,
   mSessionManager->recordTokens(sessionId, promptTokens.data(),
                                 promptTokens.size());
 
+  // --- decode loop ---
   std::vector<llama_token> generated;
   generated.reserve(maxTokens);
 

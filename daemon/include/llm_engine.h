@@ -15,9 +15,12 @@ public:
 
   bool load(const std::string &modelPath, int nCtx, int nThreads);
   bool isReady() const { return mModel != nullptr; }
+
   bool infer(int sessionId, const std::string &prompt, int maxTokens,
              TokenCallback onToken);
+
   std::string getModelInfo() const;
+
   SessionManager *sessionManager() { return mSessionManager.get(); }
 
 private:

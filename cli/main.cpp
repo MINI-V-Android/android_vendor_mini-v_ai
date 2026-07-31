@@ -107,8 +107,8 @@ int main(int argc, char **argv) {
     fclose(rf);
     return 0;
 
-  } else if (argc >= 2 && strcmp(argv[1], "create_session") == 0) {
-    SendAndReadLine(fd, "CREATE_SESSION\n");
+  } else if (argc >= 3 && strcmp(argv[1], "create_session") == 0) {
+    SendAndReadLine(fd, std::string("CREATE_SESSION ") + argv[2] + "\n");
 
   } else if (argc >= 3 && strcmp(argv[1], "kill_session") == 0) {
     SendAndReadLine(fd, std::string("KILL_SESSION ") + argv[2] + "\n");
