@@ -35,10 +35,9 @@ int SessionManager::createSession() {
   int id = mNextId++;
   SessionMeta meta;
   meta.id = id;
-  meta.state = SessionMeta::State::COLD; // ctx도 파일도 없는 초기 상태
+  meta.state = SessionMeta::State::COLD;
   meta.lastUsedMs = nowMs();
   mSessions.emplace(id, std::move(meta));
-  // 파일이 없으므로 mColdLru에는 아직 안 넣음 (evict 대상이 아님)
   return id;
 }
 
@@ -71,17 +70,14 @@ llama_context *SessionManager::activateForInfer(int id) {
     return meta.ctx;
   }
 
-  // COLD -> HOT
-  evictHotIfNeeded(id); // id는 아직 HOT이 아니므로 자기 자신이 뽑힐 일은 없음
+  evictHotIfNeeded(id);
 
   llama_context *ctx = llama_init_from_model(mModel, mCtxParams);
   if (!ctx)
     return nullptr;
 
   if (!meta.swapFilePath.empty()) {
-    // 이전에 스왑아웃된 세션 -> 복원
-    meta.tokens.resize(
-        mCtxParams.n_ctx); // 용량 상한 추정치, 아래서 실제 길이로 축소
+    meta.tokens.resize(mCtxParams.n_ctx);
     size_t nTokensOut = 0;
     bool ok = llama_state_load_file(ctx, meta.swapFilePath.c_str(),
                                     meta.tokens.data(), meta.tokens.size(),
@@ -95,9 +91,8 @@ llama_context *SessionManager::activateForInfer(int id) {
     mColdLru.erase(meta.lruIt);
     mColdUsedBytes -= meta.swapFileBytes;
     meta.swapFileBytes = 0;
-    std::remove(meta.swapFilePath.c_str()); // 다음 스왑아웃 시 새로 씀
+    std::remove(meta.swapFilePath.c_str());
   }
-  // else: 처음 활성화되는 세션 -> 빈 컨텍스트로 시작
 
   meta.ctx = ctx;
   meta.state = SessionMeta::State::HOT;
@@ -135,10 +130,23 @@ void SessionManager::evictHotIfNeeded(int excludeId) {
       }
     }
     if (victim == -1)
-      break; // excludeId 하나만 남음 -> 더 못 비움
+      break;
     if (!swapOut(mSessions.at(victim)))
       break;
   }
+}
+
+void SessionManager::pruneOldestTokens(SessionMeta &meta,
+                                       size_t nTokensToRemove) {
+  if (nTokensToRemove == 0 || nTokensToRemove >= meta.tokens.size())
+    return;
+
+  llama_memory_t mem = llama_get_memory(meta.ctx);
+  llama_memory_seq_rm(mem, /*seq_id=*/0, 0, (llama_pos)nTokensToRemove);
+  llama_memory_seq_add(mem, /*seq_id=*/0, (llama_pos)nTokensToRemove, -1,
+                       -(llama_pos)nTokensToRemove);
+
+  meta.tokens.erase(meta.tokens.begin(), meta.tokens.begin() + nTokensToRemove);
 }
 
 bool SessionManager::swapOut(SessionMeta &meta) {
@@ -151,11 +159,10 @@ bool SessionManager::swapOut(SessionMeta &meta) {
       return false;
     bytes = llama_state_get_size(meta.ctx);
 
-    // 이 세션 혼자 넣었을 때 COLD 총량이 한도를 넘는지 확인
     if (bytes + mColdUsedBytes <= mColdLimitBytes)
       break;
     if (meta.tokens.size() <= kMinKeepTokens)
-      break; // 최소치까지 잘랐으면 더는 못 줄임 -> best-effort로 수용
+      break; // best-effort로 수용
 
     size_t toRemove = std::max<size_t>(1, meta.tokens.size() / 4);
     toRemove = std::min(toRemove, meta.tokens.size() - kMinKeepTokens);
@@ -182,24 +189,11 @@ void SessionManager::evictColdIfNeeded(int excludeId) {
     int victim = mColdLru.front();
     if (victim == excludeId) {
       if (mColdLru.size() == 1)
-        break; // 얘밖에 없으면 못 지움
+        break;
       victim = *std::next(mColdLru.begin());
     }
-    killSession(victim); // COLD보다 더 차가운 단계가 없으므로 완전 소멸
+    killSession(victim);
   }
-}
-
-void SessionManager::pruneOldestTokens(SessionMeta &meta,
-                                       size_t nTokensToRemove) {
-  if (nTokensToRemove == 0 || nTokensToRemove >= meta.tokens.size())
-    return;
-
-  llama_memory_t mem = llama_get_memory(meta.ctx);
-  llama_memory_seq_rm(mem, /*seq_id=*/0, 0, (llama_pos)nTokensToRemove);
-  llama_memory_seq_add(mem, /*seq_id=*/0, (llama_pos)nTokensToRemove, -1,
-                       -(llama_pos)nTokensToRemove);
-
-  meta.tokens.erase(meta.tokens.begin(), meta.tokens.begin() + nTokensToRemove);
 }
 
 } // namespace miniv::ai
