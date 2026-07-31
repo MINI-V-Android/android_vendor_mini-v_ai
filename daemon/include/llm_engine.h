@@ -28,6 +28,7 @@ private:
   llama_context_params mCtxParams{};
   std::unique_ptr<SessionManager> mSessionManager;
   std::string mModelPath;
+  llama_sampler *mSampler = nullptr; // 신규 — top_k/top_p/temp/dist 체인
 };
 
 } // namespace miniv::ai

@@ -8,34 +8,13 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 namespace miniv::ai {
-namespace {
-
-// TODO: llama_sampler_chain(top_k+top_p+temp+dist) API로 교체 예정.
-// git log 확인 결과 llm_engine.cpp 커밋이 1개뿐이라 예전 구현을 복원할 방법이
-// 없음 -> 새로 작성 필요. 지금은 순수 그리디(argmax) 임시 구현.
-llama_token sampleNext(llama_context *ctx) {
-  const llama_model *model = llama_get_model(ctx);
-  const llama_vocab *vocab = llama_model_get_vocab(model);
-  int nVocab = llama_vocab_n_tokens(vocab);
-
-  float *logits = llama_get_logits_ith(ctx, -1);
-  llama_token best = 0;
-  float bestVal = logits[0];
-  for (int i = 1; i < nVocab; ++i) {
-    if (logits[i] > bestVal) {
-      bestVal = logits[i];
-      best = i;
-    }
-  }
-  return best;
-}
-
-} // namespace
 
 LLMEngine::~LLMEngine() {
-  // mSessionManager는 unique_ptr이라 이 소멸자 진입 시 아직 살아있음 ->
-  // SessionManager::~SessionManager()가 먼저 자동 호출되어 HOT 세션들의
-  // llama_context를 정리함 (그다음 이 소멸자 본문 실행)
+  // mSessionManager 소멸(unique_ptr) -> HOT 세션들의 llama_context 정리가 먼저
+  // 실행됨
+  if (mSampler)
+    llama_sampler_free(mSampler); // 체인 하나만 free하면 내부
+                                  // top_k/top_p/temp/dist 전부 정리됨
   if (mModel)
     llama_model_free(mModel);
   llama_backend_free();
@@ -61,6 +40,17 @@ bool LLMEngine::load(const std::string &modelPath, int nCtx, int nThreads) {
 
   mSessionManager->setHotLimit(SessionManager::kDefaultHotLimit);
   mSessionManager->setColdLimit(SessionManager::kDefaultColdLimitBytes);
+
+  // --- 샘플러 체인 구성: top_k -> top_p -> temp -> dist ---
+  // 값(k=40, p=0.9, temp=0.7)은 CPU 라운드 문서에 적힌 "그리디에 가까운 단순
+  // 샘플러"에 맞춘 잠정치. 실기기 응답 품질 보고 튜닝 필요.
+  auto sparams = llama_sampler_chain_default_params();
+  mSampler = llama_sampler_chain_init(sparams);
+  llama_sampler_chain_add(mSampler, llama_sampler_init_top_k(40));
+  llama_sampler_chain_add(mSampler, llama_sampler_init_top_p(0.9f, 1));
+  llama_sampler_chain_add(mSampler, llama_sampler_init_temp(0.7f));
+  llama_sampler_chain_add(mSampler,
+                          llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
 
   LOGI("model loaded: %s (ctx=%d, threads=%d)", modelPath.c_str(), nCtx,
        nThreads);
@@ -100,7 +90,9 @@ bool LLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens,
   generated.reserve(maxTokens);
 
   for (int i = 0; i < maxTokens; ++i) {
-    llama_token tok = sampleNext(ctx);
+    llama_token tok = llama_sampler_sample(mSampler, ctx, -1);
+    llama_sampler_accept(mSampler, tok);
+
     if (llama_vocab_is_eog(vocab, tok))
       break;
 
