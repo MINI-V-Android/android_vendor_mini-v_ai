@@ -90,6 +90,8 @@ bool LLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens,
   generated.reserve(maxTokens);
 
   for (int i = 0; i < maxTokens; ++i) {
+    if (cancelFlag && cancelFlag->load()) break;  // Cancel 여부 확인
+
     llama_token tok = llama_sampler_sample(mSampler, ctx, -1);
     llama_sampler_accept(mSampler, tok);
 

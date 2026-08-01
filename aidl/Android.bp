@@ -1,0 +1,17 @@
+aidl_interface {
+    name: "vendor-miniv-ai-aidl",
+    vendor_available: true,
+    srcs: [
+        "vendor/miniv/ai/IMiniVAiHal.aidl",
+        "vendor/miniv/ai/IMiniVAiStreamCallback.aidl",
+    ],
+    stability: "vintf",
+    backend: {
+        cpp: { enabled: false },
+        java: { enabled: false },
+        ndk: {
+            enabled: true,
+            vendor_available: true,
+        },
+    },
+}

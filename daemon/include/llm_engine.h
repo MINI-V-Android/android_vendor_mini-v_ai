@@ -19,11 +19,14 @@ public:
   bool infer(int sessionId, const std::string &prompt, int maxTokens,
              TokenCallback onToken);
 
+  void cancel(int sessionId);
+
   std::string getModelInfo() const;
 
   SessionManager *sessionManager() { return mSessionManager.get(); }
 
 private:
+  std::unordered_map<int, std::atomic<bool> *> mActiveCancelFlags;
   llama_model *mModel = nullptr;
   llama_context_params mCtxParams{};
   std::unique_ptr<SessionManager> mSessionManager;

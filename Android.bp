@@ -1,22 +1,19 @@
-package {
-    default_applicable_licenses: ["Android-Apache-2.0"],
-}
-
-cc_defaults {
-    name: "miniv_ai_defaults",
-    vendor: true,
-    cflags: [
-        "-Wall",
-        "-Werror",
-        "-Wextra",
-        "-Wno-unused-parameter",
+cc_binary {
+    name: "ai_daemon",
+    defaults: ["miniv_ai_defaults"],
+    srcs: [
+        "main.cpp",
+        "src/llm_engine.cpp",
+        "src/session_manager.cpp",
+        "src/hal_service.cpp",
     ],
-    cppflags: [
-        "-std=c++20",
+    local_include_dirs: ["include"],
+    static_libs: [
+        "libllama-miniv",
+        "vendor-miniv-ai-aidl-ndk",
     ],
     shared_libs: [
-        "libbase",
-        "liblog",
-        "libcutils",
+        "libbinder_ndk",
     ],
+    init_rc: ["etc/init.mini-v-ai.rc"],
 }
