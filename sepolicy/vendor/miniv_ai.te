@@ -5,7 +5,6 @@ type miniv_ai_data_file, file_type, data_file_type;
 
 # ==============================================================================
 # Vendor Property Definition
-# M4 매크로 함수 형태로 호출하여 type 선언 및 속성 부여를 일괄 처리
 # ==============================================================================
 vendor_public_prop(vendor_miniv_ai_prop)
 
@@ -13,10 +12,9 @@ vendor_public_prop(vendor_miniv_ai_prop)
 init_daemon_domain(miniv_ai)
 get_prop(miniv_ai, vendor_miniv_ai_prop)
 
-# adb shell을 통한 프로퍼티 변경은 userdebug / eng 빌드에서만 허용
-userdebug_or_eng(`
-    set_prop(shell, vendor_miniv_ai_prop)
-')
+# adb shell(shell 도메인)에는 부여하지 않음 — Treble neverallow(property.te:488)에
+# 걸림. 개발 중 수동 테스트는 `adb root`로 su 도메인 진입 후 setprop 사용
+# (su 도메인은 이 제약 대상이 아니라 별도 allow 불필요).
 
 # Type for the UDS socket file under /dev/socket/
 type miniv_ai_socket, file_type;
@@ -24,5 +22,6 @@ type miniv_ai_socket, file_type;
 # === Permissive during early development ===
 # Remove this line once all required allows are derived from audit logs.
 permissive miniv_ai;
+
 allow miniv_ai miniv_ai_data_file:dir { create_dir_perms };
 allow miniv_ai miniv_ai_data_file:file { create_file_perms };
