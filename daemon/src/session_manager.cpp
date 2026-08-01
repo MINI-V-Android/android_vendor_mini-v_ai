@@ -87,23 +87,23 @@ llama_context *SessionManager::activateForInfer(int id) {
   if (!ctx)
     return nullptr;
 
-  if (!meta.swapFilePath.empty()) {
-    meta.tokens.resize(mCtxParams.n_ctx);
-    size_t nTokensOut = 0;
-    bool ok = llama_state_load_file(ctx, meta.swapFilePath.c_str(),
-                                    meta.tokens.data(), meta.tokens.size(),
-                                    &nTokensOut);
-    if (!ok) {
-      llama_free(ctx);
-      return nullptr;
-    }
-    meta.tokens.resize(nTokensOut);
+    if (!meta.swapFilePath.empty()) {
+        meta.tokens.resize(mCtxParams.n_ctx);
+        size_t nTokensOut = 0;
+        size_t loaded = llama_state_seq_load_file(
+            ctx, meta.swapFilePath.c_str(), /*dest_seq_id=*/0,
+            meta.tokens.data(), meta.tokens.size(), &nTokensOut);
+        if (loaded == 0) {
+            llama_free(ctx);
+            return nullptr;
+        }
+        meta.tokens.resize(nTokensOut);
 
-    mColdLru.erase(meta.lruIt);
-    mColdUsedBytes -= meta.swapFileBytes;
-    meta.swapFileBytes = 0;
-    std::remove(meta.swapFilePath.c_str());
-  }
+        mColdLru.erase(meta.lruIt);
+        mColdUsedBytes -= meta.swapFileBytes;
+        meta.swapFileBytes = 0;
+        std::remove(meta.swapFilePath.c_str());
+    }
 
   meta.ctx = ctx;
   meta.state = SessionMeta::State::HOT;
@@ -165,15 +165,17 @@ bool SessionManager::swapOut(SessionMeta &meta) {
   size_t bytes = 0;
 
   for (;;) {
-    if (!llama_state_save_file(meta.ctx, path.c_str(), meta.tokens.data(),
-                               meta.tokens.size()))
+    size_t written = llama_state_seq_save_file(
+        meta.ctx, path.c_str(), /*seq_id=*/0, meta.tokens.data(), meta.tokens.size());
+    if (written == 0)
       return false;
-    bytes = llama_state_get_size(meta.ctx);
+
+    bytes = llama_state_seq_get_size(meta.ctx, /*seq_id=*/0);   // 변경 지점
 
     if (bytes + mColdUsedBytes <= mColdLimitBytes)
       break;
     if (meta.tokens.size() <= kMinKeepTokens)
-      break; // best-effort로 수용
+      break;   // best-effort 수용
 
     size_t toRemove = std::max<size_t>(1, meta.tokens.size() / 4);
     toRemove = std::min(toRemove, meta.tokens.size() - kMinKeepTokens);
