@@ -5,9 +5,9 @@ type miniv_ai_data_file, file_type, data_file_type;
 
 # ==============================================================================
 # Vendor Property Definition
-# vendor_property_type 및 vendor_public_prop 속성을 함께 부여하여 neverallow 회피
+# M4 매크로 함수 형태로 호출하여 type 선언 및 속성 부여를 일괄 처리
 # ==============================================================================
-type vendor_miniv_ai_prop, property_type, vendor_property_type, vendor_public_prop;
+vendor_public_prop(vendor_miniv_ai_prop)
 
 # Set up the init -> miniv_ai domain transition
 init_daemon_domain(miniv_ai)
