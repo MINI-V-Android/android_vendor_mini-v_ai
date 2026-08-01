@@ -2,10 +2,13 @@
 type miniv_ai, domain;
 type miniv_ai_exec, exec_type, vendor_file_type, file_type;
 type miniv_ai_data_file, file_type, data_file_type;
+type vendor_miniv_ai_prop, property_type;
 
 
 # Set up the init -> miniv_ai domain transition
 init_daemon_domain(miniv_ai)
+get_prop(miniv_ai, vendor_miniv_ai_prop)
+set_prop(shell, vendor_miniv_ai_prop)
 
 # Type for the UDS socket file under /dev/socket/
 type miniv_ai_socket, file_type;
