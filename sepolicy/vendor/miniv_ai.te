@@ -2,13 +2,21 @@
 type miniv_ai, domain;
 type miniv_ai_exec, exec_type, vendor_file_type, file_type;
 type miniv_ai_data_file, file_type, data_file_type;
-type vendor_miniv_ai_prop, property_type;
 
+# ==============================================================================
+# Vendor Property Definition
+# vendor_property_type 및 vendor_public_prop 속성을 함께 부여하여 neverallow 회피
+# ==============================================================================
+type vendor_miniv_ai_prop, property_type, vendor_property_type, vendor_public_prop;
 
 # Set up the init -> miniv_ai domain transition
 init_daemon_domain(miniv_ai)
 get_prop(miniv_ai, vendor_miniv_ai_prop)
-set_prop(shell, vendor_miniv_ai_prop)
+
+# adb shell을 통한 프로퍼티 변경은 userdebug / eng 빌드에서만 허용
+userdebug_or_eng(`
+    set_prop(shell, vendor_miniv_ai_prop)
+')
 
 # Type for the UDS socket file under /dev/socket/
 type miniv_ai_socket, file_type;
@@ -16,6 +24,5 @@ type miniv_ai_socket, file_type;
 # === Permissive during early development ===
 # Remove this line once all required allows are derived from audit logs.
 permissive miniv_ai;
-
 allow miniv_ai miniv_ai_data_file:dir { create_dir_perms };
 allow miniv_ai miniv_ai_data_file:file { create_file_perms };
