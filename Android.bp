@@ -1,19 +1,22 @@
-cc_binary {
-    name: "ai_daemon",
-    defaults: ["miniv_ai_defaults"],
-    srcs: [
-        "main.cpp",
-        "src/llm_engine.cpp",
-        "src/session_manager.cpp",
-        "src/hal_service.cpp",
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+cc_defaults {
+    name: "miniv_ai_defaults",
+    vendor: true,
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-Wextra",
+        "-Wno-unused-parameter",
     ],
-    local_include_dirs: ["include"],
-    static_libs: [
-        "libllama-miniv",
-        "vendor-miniv-ai-aidl-ndk",
+    cppflags: [
+        "-std=c++20",
     ],
     shared_libs: [
-        "libbinder_ndk",
+        "libbase",
+        "liblog",
+        "libcutils",
     ],
-    init_rc: ["etc/init.mini-v-ai.rc"],
 }
