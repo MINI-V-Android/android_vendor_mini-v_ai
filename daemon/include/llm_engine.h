@@ -1,4 +1,5 @@
-#pragma once#include "llama.h"
+#pragma once
+#include "llama.h"
 #include "session_manager.h"
 #include <atomic>
 #include <functional>
