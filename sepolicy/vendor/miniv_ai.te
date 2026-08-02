@@ -19,6 +19,22 @@ get_prop(miniv_ai, vendor_miniv_ai_prop)
 # Type for the UDS socket file under /dev/socket/
 type miniv_ai_socket, file_type;
 
+# ==============================================================================
+# HAL(AIDL, vendor.miniv.ai.IMiniVAiHal) 서버 도메인 — Step 3.4
+# ==============================================================================
+# binder_use는 지금 바로 필요 (main.cpp가 ABinderProcess_*/AServiceManager_*로
+# binder를 쓰기 시작함 — 기존엔 UDS만 썼어서 없었음)
+binder_use(miniv_ai)
+
+# hal_server_domain(miniv_ai, hal_foo)는 hal_miniv_ai_server 속성을 miniv_ai에
+# 부여해 "servicemanager에 vendor.miniv.ai.IMiniVAiHal/default를 add할 권한"을
+# 준다. 단, hal_attribute(miniv_ai) 선언(hal_miniv_ai 속성 자체를 만드는 것)이
+# 프레임워크 쪽 sepolicy에 먼저 반영돼야 컴파일됨 — 그 전까지는 undefined
+# attribute 빌드 에러가 남. 프레임워크 쪽 반영 확인 후 아래 주석 해제할 것.
+# (MINI-V_context.md 최신 버전 §3-1 참고)
+#
+# hal_server_domain(miniv_ai, hal_miniv_ai)
+
 # === Permissive during early development ===
 # Remove this line once all required allows are derived from audit logs.
 permissive miniv_ai;
