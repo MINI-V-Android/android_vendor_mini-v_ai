@@ -13,7 +13,7 @@ cc_binary {
 
     static_libs: [
         "libllama-miniv",
-        "vendor-miniv-ai-aidl-ndk",
+        "vendor-miniv-ai-aidl-V1-ndk",
     ],
 
     shared_libs: [
