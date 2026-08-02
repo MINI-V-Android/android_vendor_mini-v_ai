@@ -1,6 +1,6 @@
-#pragma once
-#include "llama.h"
+#pragma once#include "llama.h"
 #include "session_manager.h"
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <string>
@@ -16,17 +16,17 @@ public:
   bool load(const std::string &modelPath, int nCtx, int nThreads);
   bool isReady() const { return mModel != nullptr; }
 
+  // cancelFlag: HAL 레이어(hal_service.cpp)가 세션별로 소유/관리하는 취소
+  // 플래그의 포인터. UDS 경로(main.cpp)는 아직 취소 명령이 없어 nullptr로
+  // 호출하며, 이 경우 취소 체크를 건너뛴다.
   bool infer(int sessionId, const std::string &prompt, int maxTokens,
-             TokenCallback onToken);
-
-  void cancel(int sessionId);
+             TokenCallback onToken, std::atomic<bool> *cancelFlag = nullptr);
 
   std::string getModelInfo() const;
 
   SessionManager *sessionManager() { return mSessionManager.get(); }
 
 private:
-  std::unordered_map<int, std::atomic<bool> *> mActiveCancelFlags;
   llama_model *mModel = nullptr;
   llama_context_params mCtxParams{};
   std::unique_ptr<SessionManager> mSessionManager;

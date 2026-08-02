@@ -64,7 +64,7 @@ std::string LLMEngine::getModelInfo() const {
 }
 
 bool LLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens,
-                      TokenCallback onToken) {
+                      TokenCallback onToken, std::atomic<bool> *cancelFlag) {
   llama_context *ctx = mSessionManager->activateForInfer(sessionId);
   if (!ctx)
     return false; // main.cpp가 ERROR SESSION_NOT_FOUND로 응답
