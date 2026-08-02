@@ -16,6 +16,13 @@
 #include "base64_util.h"
 #include "llm_engine.h"
 
+#include "hal_service.h"               
+
+#include <android/binder_ibinder.h>     
+#include <android/binder_manager.h>     
+#include <android/binder_process.h>     
+#include <memory>                       
+
 namespace {
 
 constexpr const char *kSocketName = "miniv_ai";
@@ -130,6 +137,32 @@ int main(int argc, char **argv) {
     LOG(ERROR) << "model load failed, exiting";
     return 1;
   }
+
+  // ── HAL 등록 (신규, §11-c) ──────────────────────────────────
+  // UDS accept 루프는 계속 메인 스레드 blocking으로 돌고, HAL은
+  // libbinder의 별도 스레드풀에서 처리되므로 서로 간섭하지 않음.
+  ABinderProcess_setThreadPoolMaxThreadCount(4);
+
+  auto halService =
+      ndk::SharedRefBase::make<miniv::ai::MiniVAiHalService>(&gEngine);
+  const std::string halInstance =
+      std::string(miniv::ai::MiniVAiHalService::descriptor) + "/default";
+
+  binder_status_t halStatus = AServiceManager_addService(
+      halService->asBinder().get(), halInstance.c_str());
+  if (halStatus != STATUS_OK) {
+    // §6-9(service_contexts 미등록) 때문에 지금은 실패가 예상되는 지점.
+    // permissive 상태라 addService 자체는 통과하고 denial 로그만 찍힐 수도
+    // 있고, enforcing 전환 후엔 진짜로 막힘. 어느 쪽이든 프로세스는 계속
+    // 살려서 UDS 디버깅 경로(ai_daemon_cli)는 항상 쓸 수 있게 둠.
+    LOG(ERROR) << "AServiceManager_addService failed for " << halInstance
+               << ": " << halStatus;
+  } else {
+    LOG(INFO) << "HAL registered: " << halInstance;
+  }
+
+  ABinderProcess_startThreadPool();
+  // ─────────────────────────────────────────────────────────────
 
   signal(SIGTERM, SignalHandler);
   signal(SIGINT, SignalHandler);

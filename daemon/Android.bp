@@ -6,12 +6,18 @@ cc_binary {
         "main.cpp",
         "src/llm_engine.cpp",
         "src/session_manager.cpp",
+        "src/hal_service.cpp",
     ],
 
     local_include_dirs: ["include"],
 
     static_libs: [
         "libllama-miniv",
+        "vendor-miniv-ai-aidl-ndk",
+    ],
+
+    shared_libs: [
+        "libbinder_ndk",
     ],
 
     init_rc: [
