@@ -19,6 +19,17 @@ get_prop(miniv_ai, vendor_miniv_ai_prop)
 # Type for the UDS socket file under /dev/socket/
 type miniv_ai_socket, file_type;
 
+# ==============================================================================
+# HAL(AIDL, vendor.miniv.ai.IMiniVAiHal) 서버 도메인 — Step 3.4
+# ==============================================================================
+binder_use(miniv_ai)
+
+# hal_miniv_ai 속성이 frameworks/mini-v/sepolicy/private/hal_miniv_ai.te에
+# 반영 완료됨 (프레임워크 팀 확인, m selinux_policy 단독 빌드 통과) — 활성화.
+# servicemanager에 vendor.miniv.ai.IMiniVAiHal/default를 add할 권한을 miniv_ai
+# 도메인에 부여.
+hal_server_domain(miniv_ai, hal_miniv_ai)
+
 # === Permissive during early development ===
 # Remove this line once all required allows are derived from audit logs.
 permissive miniv_ai;
