@@ -9,12 +9,12 @@ public:
   explicit MiniVAiHalService(LLMEngine* engine) : mEngine(engine) {}
 
   ndk::ScopedAStatus isReady(bool* _aidl_return) override;
-  ndk::ScopedAStatus createSession(int32_t sessionId, bool* _aidl_return) override;
-  ndk::ScopedAStatus destroySession(int32_t sessionId, bool* _aidl_return) override;
+  ndk::ScopedAStatus createSession(int32_t sessionId, int32_t* _aidl_return) override;
+  ndk::ScopedAStatus destroySession(int32_t sessionId, int32_t* _aidl_return) override;
   ndk::ScopedAStatus inferStream(
       int32_t sessionId, const std::string& prompt, int32_t maxTokens,
       const std::shared_ptr<aidl::vendor::miniv::ai::IMiniVAiStreamCallback>& callback,
-      bool* _aidl_return) override;
+      int32_t* _aidl_return) override;
   ndk::ScopedAStatus cancel(int32_t sessionId) override;
   ndk::ScopedAStatus getModelInfo(std::string* _aidl_return) override;
 

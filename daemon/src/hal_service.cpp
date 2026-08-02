@@ -6,6 +6,7 @@
 
 namespace miniv::ai {
 
+using aidl::vendor::miniv::ai::IMiniVAiHal;
 using aidl::vendor::miniv::ai::IMiniVAiStreamCallback;
 
 namespace {
@@ -18,19 +19,30 @@ ndk::ScopedAStatus MiniVAiHalService::isReady(bool* _aidl_return) {
   return ndk::ScopedAStatus::ok();
 }
 
-ndk::ScopedAStatus MiniVAiHalService::createSession(int32_t sessionId, bool* _aidl_return) {
-  *_aidl_return = mEngine->sessionManager()->createSession(sessionId);
+ndk::ScopedAStatus MiniVAiHalService::createSession(int32_t sessionId, int32_t* _aidl_return) {
+  if (!mEngine->isReady()) {
+    *_aidl_return = IMiniVAiHal::CREATE_SESSION_ERR_ENGINE_NOT_READY;
+    return ndk::ScopedAStatus::ok();
+  }
+  bool ok = mEngine->sessionManager()->createSession(sessionId);
+  *_aidl_return = ok ? 0 : IMiniVAiHal::CREATE_SESSION_ERR_ALREADY_EXISTS;
   return ndk::ScopedAStatus::ok();
 }
 
-ndk::ScopedAStatus MiniVAiHalService::destroySession(int32_t sessionId, bool* _aidl_return) {
-  *_aidl_return = mEngine->sessionManager()->killSession(sessionId);
+ndk::ScopedAStatus MiniVAiHalService::destroySession(int32_t sessionId, int32_t* _aidl_return) {
+  bool ok = mEngine->sessionManager()->killSession(sessionId);
+  *_aidl_return = ok ? 0 : IMiniVAiHal::DESTROY_SESSION_ERR_NOT_FOUND;
   return ndk::ScopedAStatus::ok();
 }
 
 ndk::ScopedAStatus MiniVAiHalService::inferStream(
     int32_t sessionId, const std::string& prompt, int32_t maxTokens,
-    const std::shared_ptr<IMiniVAiStreamCallback>& callback, bool* _aidl_return) {
+    const std::shared_ptr<IMiniVAiStreamCallback>& callback, int32_t* _aidl_return) {
+
+  if (!mEngine->isReady()) {
+    *_aidl_return = IMiniVAiHal::INFER_ERR_ENGINE_NOT_READY;
+    return ndk::ScopedAStatus::ok();
+  }
 
   auto cancelFlag = std::make_shared<std::atomic<bool>>(false);
   {
@@ -51,11 +63,14 @@ ndk::ScopedAStatus MiniVAiHalService::inferStream(
     if (ok) {
       callback->onComplete(sessionId);
     } else {
-      callback->onError(sessionId, -1, "SESSION_NOT_FOUND");
+      // 세션이 없어서 infer()가 실패한 경우. 프레임워크 쪽 관례(unknown
+      // session도 SESSION_EVICTED로 보고)를 그대로 따라 이 코드를 씀.
+      callback->onError(sessionId, IMiniVAiStreamCallback::ERROR_SESSION_NOT_FOUND,
+                         "SESSION_NOT_FOUND");
     }
   }).detach();
 
-  *_aidl_return = true;
+  *_aidl_return = 0;
   return ndk::ScopedAStatus::ok();
 }
 
