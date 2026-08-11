@@ -1,0 +1,67 @@
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+// ==============================================================================
+// NPU 라운드 — llama.cpp-npu 리서치 포크 빌드 산출물, prebuilt 동적 배치
+// (MINI-V_NPU_Round_Progress.md §3-2 — Soong 소스 vendoring 아님, dlopen 전용)
+// ==============================================================================
+
+cc_defaults {
+    name: "miniv_npu_prebuilt_defaults",
+    vendor: true,
+    // ai_daemon이 dlopen으로만 쓰고 빌드 시점에 링크 안 하므로,
+    // Soong의 표준 arm64 ELF 검증(심볼 export 등)을 통과 못 할 수 있음.
+    check_elf_files: false,
+    strip: { none: true },
+}
+
+cc_prebuilt_library_shared {
+    name: "libggml-base-npu-prebuilt",
+    defaults: ["miniv_npu_prebuilt_defaults"],
+    srcs: ["lib64/libggml-base.so"],
+    relative_install_path: "miniv-npu",
+}
+
+cc_prebuilt_library_shared {
+    name: "libggml-npu-prebuilt",
+    defaults: ["miniv_npu_prebuilt_defaults"],
+    srcs: ["lib64/libggml.so"],
+    relative_install_path: "miniv-npu",
+}
+
+cc_prebuilt_library_shared {
+    name: "libggml-cpu-npu-prebuilt",
+    defaults: ["miniv_npu_prebuilt_defaults"],
+    srcs: ["lib64/libggml-cpu.so"],
+    relative_install_path: "miniv-npu",
+}
+
+cc_prebuilt_library_shared {
+    name: "libggml-htp-npu-prebuilt",
+    defaults: ["miniv_npu_prebuilt_defaults"],
+    srcs: ["lib64/libggml-htp.so"],
+    relative_install_path: "miniv-npu",
+}
+
+cc_prebuilt_library_shared {
+    name: "libllama-npu-prebuilt",
+    defaults: ["miniv_npu_prebuilt_defaults"],
+    srcs: ["lib64/libllama.so"],
+    relative_install_path: "miniv-npu",
+}
+
+cc_prebuilt_library_shared {
+    name: "libhtp-ops-npu-prebuilt",
+    defaults: ["miniv_npu_prebuilt_defaults"],
+    srcs: ["lib64/libhtp_ops.so"],
+    relative_install_path: "miniv-npu",
+}
+
+// Q6DSP(Hexagon) ELF — aarch64가 아님, 표준 검색 경로에 설치
+cc_prebuilt_library_shared {
+    name: "libhtp-ops-skel-npu-prebuilt",
+    defaults: ["miniv_npu_prebuilt_defaults"],
+    srcs: ["dsp/libhtp_ops_skel.so"],
+    relative_install_path: "rfsa/adsp",
+}

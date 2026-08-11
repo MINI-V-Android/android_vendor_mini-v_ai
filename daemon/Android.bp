@@ -20,6 +20,16 @@ cc_binary {
         "libbinder_ndk",
     ],
 
+    required: [
+        "libggml-base-npu-prebuilt",
+        "libggml-npu-prebuilt",
+        "libggml-cpu-npu-prebuilt",
+        "libggml-htp-npu-prebuilt",
+        "libllama-npu-prebuilt",
+        "libhtp-ops-npu-prebuilt",
+        "libhtp-ops-skel-npu-prebuilt",
+    ],
+    
     init_rc: [
         "etc/init.mini-v-ai.rc",
     ],
