@@ -29,6 +29,7 @@ cc_binary {
         "libllama-npu-prebuilt",
         "libhtp-ops-npu-prebuilt",
         "libhtp-ops-skel-npu-prebuilt",
+        "miniv-npu-model-qwen2.5-1.5b",
     ],
     
     init_rc: [
