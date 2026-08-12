@@ -2,10 +2,8 @@ cc_library_static {
     name: "libnpu-engine-miniv",
     defaults: ["miniv_ai_defaults"],
     srcs: ["src/npu_llm_engine.cpp"],
-    local_include_dirs: [
-        "include",                  // npu_llm_engine.h 자신
-        "../prebuilts/npu/include", // llama.cpp-npu 전용 헤더, 최우선
-    ],
+    local_include_dirs: ["include"],
+    include_dirs: ["vendor/mini-v/ai/prebuilts/npu/include"],
 }
 
 cc_binary {
