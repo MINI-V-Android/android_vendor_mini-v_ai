@@ -28,6 +28,7 @@ cc_binary {
         "libggml-htp-npu-prebuilt",
         "libllama-npu-prebuilt",
         "libhtp-ops-npu-prebuilt",
+        "libhtp-ops-skel-npu-prebuilt",
     ],
     
     init_rc: [
