@@ -63,11 +63,5 @@ cc_prebuilt_library_shared {
     defaults: ["miniv_npu_prebuilt_defaults"],
     srcs: ["dsp/libhtp_ops_skel.so"],
     relative_install_path: "rfsa/adsp",
-    // 실기기 관례상 다른 cDSP 스켈레톤들이 /vendor/lib/rfsa/adsp/(32bit 슬롯)에
-    // 있음 — CPU 아키텍처와 무관, DSP 대상 파일이라 이 관례를 따름.
-    // 기본값(vendor:true만)이면 lib64로 감 → 명시적으로 32 지정 필요.
-    compile_multilib: "32",
-    // 모듈명이 아니라 원본 파일명 그대로 설치되도록 명시 (안 주면
-    // "libhtp-ops-skel-npu-prebuilt.so"로 설치되어 런타임에 못 찾음 — 실제 발생했던 버그)
     stem: "libhtp_ops_skel",
 }
