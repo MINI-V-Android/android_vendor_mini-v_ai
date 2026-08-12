@@ -2,26 +2,19 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-// ==============================================================================
-// NPU 라운드 — llama.cpp-npu 리서치 포크 빌드 산출물, prebuilt 동적 배치
-// (MINI-V_NPU_Round_Progress.md §3-2 — Soong 소스 vendoring 아님, dlopen 전용)
-// ==============================================================================
-
 cc_defaults {
     name: "miniv_npu_prebuilt_defaults",
     vendor: true,
-    // ai_daemon이 dlopen으로만 쓰고 빌드 시점에 링크 안 하므로,
-    // Soong의 표준 arm64 ELF 검증(심볼 export 등)을 통과 못 할 수 있음.
     check_elf_files: false,
     strip: { none: true },
 }
-// TODO: 경로 확인 필요
+
 cc_prebuilt_library_shared {
     name: "libggml-base-npu-prebuilt",
     defaults: ["miniv_npu_prebuilt_defaults"],
     srcs: ["lib64/libggml-base.so"],
     relative_install_path: "miniv-npu",
-    stem: "libggml-base",
+    stem: "libggml-base",           
 }
 
 cc_prebuilt_library_shared {
@@ -29,7 +22,7 @@ cc_prebuilt_library_shared {
     defaults: ["miniv_npu_prebuilt_defaults"],
     srcs: ["lib64/libggml.so"],
     relative_install_path: "miniv-npu",
-    stem: "libggml,
+    stem: "libggml",                 
 }
 
 cc_prebuilt_library_shared {
@@ -37,7 +30,7 @@ cc_prebuilt_library_shared {
     defaults: ["miniv_npu_prebuilt_defaults"],
     srcs: ["lib64/libggml-cpu.so"],
     relative_install_path: "miniv-npu",
-    stem: "libggml-cpu",
+    stem: "libggml-cpu",             
 }
 
 cc_prebuilt_library_shared {
@@ -45,7 +38,7 @@ cc_prebuilt_library_shared {
     defaults: ["miniv_npu_prebuilt_defaults"],
     srcs: ["lib64/libggml-htp.so"],
     relative_install_path: "miniv-npu",
-    stem: "libggml-htp",
+    stem: "libggml-htp",             
 }
 
 cc_prebuilt_library_shared {
@@ -53,7 +46,7 @@ cc_prebuilt_library_shared {
     defaults: ["miniv_npu_prebuilt_defaults"],
     srcs: ["lib64/libllama.so"],
     relative_install_path: "miniv-npu",
-    stem: "libllama",
+    stem: "libllama",                
 }
 
 cc_prebuilt_library_shared {
@@ -61,13 +54,14 @@ cc_prebuilt_library_shared {
     defaults: ["miniv_npu_prebuilt_defaults"],
     srcs: ["lib64/libhtp_ops.so"],
     relative_install_path: "miniv-npu",
-    stem: "libhtp_ops",
+    stem: "libhtp_ops",           
 }
 
+// Q6DSP(Hexagon) ELF — 이미 stem 있음, 이번 수정 대상 아님
 cc_prebuilt_library_shared {
     name: "libhtp-ops-skel-npu-prebuilt",
     defaults: ["miniv_npu_prebuilt_defaults"],
     srcs: ["dsp/libhtp_ops_skel.so"],
     relative_install_path: "rfsa/adsp",
-    stem: "libhtp_ops_skel",
+    stem: "libhtp_ops_skel",        // ← 원래부터 있었음, 손댈 필요 없음
 }
