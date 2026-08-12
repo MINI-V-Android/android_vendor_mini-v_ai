@@ -58,10 +58,12 @@ cc_prebuilt_library_shared {
     relative_install_path: "miniv-npu",
 }
 
-// Q6DSP(Hexagon) ELF — aarch64가 아님, 표준 검색 경로에 설치
-cc_prebuilt_library_shared {
+prebuilt_etc {
     name: "libhtp-ops-skel-npu-prebuilt",
-    defaults: ["miniv_npu_prebuilt_defaults"],
-    srcs: ["dsp/libhtp_ops_skel.so"],
-    relative_install_path: "rfsa/adsp",
+    vendor: true,
+    src: "dsp/libhtp_ops_skel.so",
+    // prebuilt_etc의 기본 설치 루트는 /vendor/etc/ 이므로,
+    // /vendor/lib/rfsa/adsp/까지 도달하려면 상대경로를 거슬러 올라가야 함
+    relative_install_path: "../lib/rfsa/adsp",
+    filename: "libhtp_ops_skel.so",
 }
