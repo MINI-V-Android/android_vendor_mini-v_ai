@@ -28,6 +28,7 @@ cc_binary {
 
     shared_libs: [
         "libbinder_ndk",
+        "libllama-npu-prebuilt", 
     ],
 
     required: [
