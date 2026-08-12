@@ -1,3 +1,13 @@
+cc_library_static {
+    name: "libnpu-engine-miniv",
+    defaults: ["miniv_ai_defaults"],
+    srcs: ["src/npu_llm_engine.cpp"],
+    local_include_dirs: [
+        "include",                  // npu_llm_engine.h 자신
+        "../prebuilts/npu/include", // llama.cpp-npu 전용 헤더, 최우선
+    ],
+}
+
 cc_binary {
     name: "ai_daemon",
     defaults: ["miniv_ai_defaults"],
@@ -7,7 +17,6 @@ cc_binary {
         "src/llm_engine.cpp",
         "src/session_manager.cpp",
         "src/hal_service.cpp",
-        "src/npu_llm_engine.cpp",
     ],
 
     local_include_dirs: ["include"],
@@ -15,6 +24,7 @@ cc_binary {
     static_libs: [
         "libllama-miniv",
         "vendor-miniv-ai-aidl-V1-ndk",
+        "libnpu-engine-miniv",
     ],
 
     shared_libs: [
