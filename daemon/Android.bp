@@ -7,6 +7,7 @@ cc_binary {
         "src/llm_engine.cpp",
         "src/session_manager.cpp",
         "src/hal_service.cpp",
+        "src/npu_llm_engine.cpp",
     ],
 
     local_include_dirs: ["include"],
