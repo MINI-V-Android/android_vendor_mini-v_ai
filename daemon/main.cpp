@@ -15,7 +15,7 @@
 
 #include "base64_util.h"
 #include "llm_engine.h"
-
+#include "npu_llm_engine.h"
 #include "hal_service.h"               
 
 #include <android/binder_ibinder.h>     
@@ -30,6 +30,7 @@ constexpr int kBacklog = 4;
 
 std::atomic<bool> g_running{true};
 miniv::ai::LLMEngine gEngine;
+miniv::ai::NpuLLMEngine gNpuEngine;
 
 void SignalHandler(int signum) {
   LOG(INFO) << "received signal " << signum << ", shutting down";
@@ -108,7 +109,57 @@ void HandleClient(int clientFd) {
           sessionId, prompt, maxTokens, [wf](const std::string &tok) {
             fprintf(wf, "TOKEN %s\n", base64Encode(tok).c_str());
             fflush(wf);
+          });bool ok = gEngine.infer(
+          sessionId, prompt, maxTokens, [wf](const std::string &tok) {
+            fprintf(wf, "TOKEN %s\n", base64Encode(tok).c_str());
+            fflush(wf);
           });
+
+      fprintf(wf, ok ? "DONE\n" : "ERROR SESSION_NOT_FOUND\n");
+      fflush(wf);
+
+    } else if (cmd.rfind("NPU_LOAD ", 0) == 0) {
+      // NPU_LOAD <modelPath> <backendDir> <nCtx> <nThreads>
+      char modelPath[512] = {0};
+      char backendDir[512] = {0};
+      int nCtx = 0, nThreads = 0;
+      sscanf(cmd.c_str() + 9, "%511s %511s %d %d", modelPath, backendDir,
+             &nCtx, &nThreads);
+
+      bool ok = gNpuEngine.load(modelPath, backendDir, nCtx, nThreads);
+      fprintf(wf, ok ? "OK\n" : "ERROR NPU_LOAD_FAILED\n");
+      fflush(wf);
+
+    } else if (cmd.rfind("NPU_INFER ", 0) == 0) {
+      // NPU_INFER <maxTokens>\n<prompt>\nEND\n  (세션 없음, 단발 질문)
+      int maxTokens = atoi(cmd.c_str() + 10);
+
+      std::string prompt;
+      char promptLine[4096];
+      while (fgets(promptLine, sizeof(promptLine), rf)) {
+        if (strncmp(promptLine, "END", 3) == 0)
+          break;
+        prompt += promptLine;
+      }
+      if (!prompt.empty() && prompt.back() == '\n')
+        prompt.pop_back();
+
+      if (!gNpuEngine.isReady()) {
+        fprintf(wf, "ERROR NPU_NOT_READY\n");
+        fflush(wf);
+        continue;
+      }
+
+      bool ok = gNpuEngine.infer(
+          prompt, maxTokens, [wf](const std::string &tok) {
+            fprintf(wf, "TOKEN %s\n", base64Encode(tok).c_str());
+            fflush(wf);
+          });
+
+      fprintf(wf, ok ? "DONE\n" : "ERROR NPU_INFER_FAILED\n");
+      fflush(wf);
+
+    } else if (cmd.rfind("HELLO", 0) == 0) {
 
       fprintf(wf, ok ? "DONE\n" : "ERROR SESSION_NOT_FOUND\n");
       fflush(wf);
