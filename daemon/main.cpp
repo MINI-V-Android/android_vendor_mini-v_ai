@@ -104,12 +104,7 @@ void HandleClient(int clientFd) {
         fflush(wf);
         continue;
       }
-
       bool ok = gEngine.infer(
-          sessionId, prompt, maxTokens, [wf](const std::string &tok) {
-            fprintf(wf, "TOKEN %s\n", base64Encode(tok).c_str());
-            fflush(wf);
-          });bool ok = gEngine.infer(
           sessionId, prompt, maxTokens, [wf](const std::string &tok) {
             fprintf(wf, "TOKEN %s\n", base64Encode(tok).c_str());
             fflush(wf);
@@ -158,12 +153,7 @@ void HandleClient(int clientFd) {
 
       fprintf(wf, ok ? "DONE\n" : "ERROR NPU_INFER_FAILED\n");
       fflush(wf);
-
-    } else if (cmd.rfind("HELLO", 0) == 0) {
-
-      fprintf(wf, ok ? "DONE\n" : "ERROR SESSION_NOT_FOUND\n");
-      fflush(wf);
-
+      
     } else if (cmd.rfind("HELLO", 0) == 0) {
       fprintf(wf, "HELLO from miniv_ai\n");
       fflush(wf);
