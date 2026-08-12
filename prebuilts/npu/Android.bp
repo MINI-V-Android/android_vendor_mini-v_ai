@@ -15,12 +15,13 @@ cc_defaults {
     check_elf_files: false,
     strip: { none: true },
 }
-
+// TODO: 경로 확인 필요
 cc_prebuilt_library_shared {
     name: "libggml-base-npu-prebuilt",
     defaults: ["miniv_npu_prebuilt_defaults"],
     srcs: ["lib64/libggml-base.so"],
     relative_install_path: "miniv-npu",
+    stem: "libggml-base",
 }
 
 cc_prebuilt_library_shared {
@@ -28,6 +29,7 @@ cc_prebuilt_library_shared {
     defaults: ["miniv_npu_prebuilt_defaults"],
     srcs: ["lib64/libggml.so"],
     relative_install_path: "miniv-npu",
+    stem: "libggml,
 }
 
 cc_prebuilt_library_shared {
@@ -35,6 +37,7 @@ cc_prebuilt_library_shared {
     defaults: ["miniv_npu_prebuilt_defaults"],
     srcs: ["lib64/libggml-cpu.so"],
     relative_install_path: "miniv-npu",
+    stem: "libggml-cpu",
 }
 
 cc_prebuilt_library_shared {
@@ -42,6 +45,7 @@ cc_prebuilt_library_shared {
     defaults: ["miniv_npu_prebuilt_defaults"],
     srcs: ["lib64/libggml-htp.so"],
     relative_install_path: "miniv-npu",
+    stem: "libggml-htp",
 }
 
 cc_prebuilt_library_shared {
@@ -49,6 +53,7 @@ cc_prebuilt_library_shared {
     defaults: ["miniv_npu_prebuilt_defaults"],
     srcs: ["lib64/libllama.so"],
     relative_install_path: "miniv-npu",
+    stem: "libllama",
 }
 
 cc_prebuilt_library_shared {
@@ -56,6 +61,7 @@ cc_prebuilt_library_shared {
     defaults: ["miniv_npu_prebuilt_defaults"],
     srcs: ["lib64/libhtp_ops.so"],
     relative_install_path: "miniv-npu",
+    stem: "libhtp_ops",
 }
 
 cc_prebuilt_library_shared {
