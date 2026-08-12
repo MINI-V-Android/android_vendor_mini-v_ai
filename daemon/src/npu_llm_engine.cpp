@@ -45,6 +45,8 @@ bool NpuLLMEngine::load(const std::string &modelPath,
   llama_context_params cparams = llama_context_default_params();
   cparams.n_ctx = nCtx;
   cparams.n_threads = nThreads;
+  cparams.n_threads_batch = nThreads;
+  cparams.flash_attn = true;
 
   mCtx = llama_init_from_model(mModel, cparams);
   if (!mCtx) {
