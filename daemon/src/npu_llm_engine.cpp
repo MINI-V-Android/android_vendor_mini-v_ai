@@ -39,7 +39,7 @@ bool NpuLLMEngine::load(const std::string &modelPath,
 
     llama_model_params mparams = llama_model_default_params();
     // 백엔드(HTP)가 있으면 그쪽으로 최대한 레이어를 오프로드
-    mparams.n_gpu_layers = 999;
+    mparams.n_gpu_layers = 0;
 
     mModel = llama_load_model_from_file(modelPath.c_str(), mparams);
     if (!mModel) {
