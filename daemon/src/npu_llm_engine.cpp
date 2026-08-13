@@ -52,10 +52,11 @@ bool NpuLLMEngine::load(const std::string &modelPath,
     // 샘플러는 CPU 엔진과 동일한 값 사용 (§5-2 문서 기준, 잠정치)
     auto sparams = llama_sampler_chain_default_params();
     mSampler = llama_sampler_chain_init(sparams);
-    llama_sampler_chain_add(mSampler, llama_sampler_init_top_k(40));
-    llama_sampler_chain_add(mSampler, llama_sampler_init_top_p(0.9f, 1));
-    llama_sampler_chain_add(mSampler, llama_sampler_init_temp(0.7f));
-    llama_sampler_chain_add(mSampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
+    llama_sampler_chain_add(mSampler, llama_sampler_init_greedy());
+    // llama_sampler_chain_add(mSampler, llama_sampler_init_top_k(40));
+    // llama_sampler_chain_add(mSampler, llama_sampler_init_top_p(0.9f, 1));
+    // llama_sampler_chain_add(mSampler, llama_sampler_init_temp(0.7f));
+    // llama_sampler_chain_add(mSampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
 
     LOGI("NPU model loaded: %s (ctx=%d, threads=%d, backendDir=%s)",
              modelPath.c_str(), nCtx, nThreads, backendLibDir.c_str());
@@ -91,6 +92,11 @@ bool NpuLLMEngine::infer(const std::string &prompt, int maxTokens,
   for (int i = 0; i < maxTokens; ++i) {
     llama_token tok = llama_sampler_sample(mSampler, mCtx, -1);
     llama_sampler_accept(mSampler, tok);
+
+    if (i < 3) {
+      LOGI("token[%d]: id=%d, n_vocab=%d", i, tok, llama_n_vocab(mModel));
+    }
+    
     if (llama_token_is_eog(mModel, tok)) {
       LOGI("EOG hit at i=%d, tok=%d", i, tok);
       break;
