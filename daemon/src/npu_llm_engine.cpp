@@ -49,6 +49,21 @@ bool NpuLLMEngine::load(const std::string &modelPath,
         return false;
     }
 
+  {
+    float *logits = llama_get_logits(mCtx);
+    if (!logits) {
+      LOGE("llama_get_logits returned NULL");
+    } else {
+      LOGI("logits[0..4] = %f %f %f %f %f", logits[0], logits[1], logits[2],
+           logits[3], logits[4]);
+      float maxVal = logits[0];
+      int maxIdx = 0;
+      for (int v = 1; v < 151936; ++v) {
+        if (logits[v] > maxVal) { maxVal = logits[v]; maxIdx = v; }
+      }
+      LOGI("manual argmax: idx=%d val=%f", maxIdx, maxVal);
+    }
+  }
     // 샘플러는 CPU 엔진과 동일한 값 사용 (§5-2 문서 기준, 잠정치)
     auto sparams = llama_sampler_chain_default_params();
     mSampler = llama_sampler_chain_init(sparams);
