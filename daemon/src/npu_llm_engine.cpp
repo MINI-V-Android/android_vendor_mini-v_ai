@@ -68,7 +68,19 @@ bool NpuLLMEngine::load(const std::string &modelPath,
     // llama_sampler_chain_add(mSampler, llama_sampler_init_top_p(0.9f, 1));
     // llama_sampler_chain_add(mSampler, llama_sampler_init_temp(0.7f));
     // llama_sampler_chain_add(mSampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
-
+    {
+      llama_token bosToken = llama_token_bos(mModel);
+      if (bosToken == LLAMA_TOKEN_NULL) {
+        bosToken = 0;  // BOS가 없는 모델 대비 폴백
+      }
+      llama_batch warmupBatch = llama_batch_get_one(&bosToken, 1);
+      if (llama_decode(mCtx, warmupBatch) != 0) {
+        LOGE("warmup decode failed");
+      }
+      llama_kv_cache_clear(mCtx);
+      llama_synchronize(mCtx);
+      LOGI("warmup decode done (bos=%d)", bosToken);
+    }
     LOGI("NPU model loaded: %s (ctx=%d, threads=%d, backendDir=%s)",
              modelPath.c_str(), nCtx, nThreads, backendLibDir.c_str());
     return true;
