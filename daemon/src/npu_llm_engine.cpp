@@ -67,38 +67,46 @@ std::string NpuLLMEngine::getModelInfo() const {
 }
 
 bool NpuLLMEngine::infer(const std::string &prompt, int maxTokens,
-      TokenCallback onToken) {
-    if (!mCtx) return false;
+                          TokenCallback onToken) {
+  if (!mCtx) return false;
 
-    llama_kv_cache_clear(mCtx);
-        int nPromptTokens = -llama_tokenize(mModel, prompt.c_str(), prompt.size(),
-                               nullptr, 0, true, true);
-    std::vector<llama_token> promptTokens(nPromptTokens);
-    llama_tokenize(mModel, prompt.c_str(), prompt.size(), promptTokens.data(),
-                                 nPromptTokens, true, true);
+  LOGI("infer() called: maxTokens=%d, promptLen=%zu", maxTokens, prompt.size());
 
-    llama_batch batch =
-            llama_batch_get_one(promptTokens.data(), promptTokens.size());
-    if (llama_decode(mCtx, batch) != 0) {
-        LOGE("NPU prefill decode failed");
-        return false;
+  llama_kv_cache_clear(mCtx);
+
+  int nPromptTokens = -llama_tokenize(mModel, prompt.c_str(), prompt.size(),
+                                       nullptr, 0, true, true);
+  std::vector<llama_token> promptTokens(nPromptTokens);
+  llama_tokenize(mModel, prompt.c_str(), prompt.size(), promptTokens.data(),
+                 nPromptTokens, true, true);
+
+  LOGI("tokenized: nPromptTokens=%d", nPromptTokens);
+
+  llama_batch batch = llama_batch_get_one(promptTokens.data(), promptTokens.size());
+  if (llama_decode(mCtx, batch) != 0) {
+    LOGE("prefill llama_decode failed");
+    return false;
+  }
+
+  for (int i = 0; i < maxTokens; ++i) {
+    llama_token tok = llama_sampler_sample(mSampler, mCtx, -1);
+    llama_sampler_accept(mSampler, tok);
+    if (llama_token_is_eog(mModel, tok)) {
+      LOGI("EOG hit at i=%d, tok=%d", i, tok);
+      break;
     }
 
-    for (int i = 0; i < maxTokens; ++i) {
-        llama_token tok = llama_sampler_sample(mSampler, mCtx, -1);
-        llama_sampler_accept(mSampler, tok);
+    char buf[256];
+    int n = llama_token_to_piece(mModel, tok, buf, sizeof(buf), 0, true);
+    onToken(std::string(buf, n));
 
-        if (llama_token_is_eog(mModel, tok)) break;
-
-        char buf[256];
-        int n = llama_token_to_piece(mModel, tok, buf, sizeof(buf), 0, true);
-        onToken(std::string(buf, n));
-
-        llama_batch nextBatch = llama_batch_get_one(&tok, 1);
-        if (llama_decode(mCtx, nextBatch) != 0) break;
+    llama_batch nextBatch = llama_batch_get_one(&tok, 1);
+    if (llama_decode(mCtx, nextBatch) != 0) {
+      LOGE("decode loop failed at i=%d", i);
+      break;
     }
-
-    return true;
+  }
+  return true;
 }
 
 }    // namespace miniv::ai
