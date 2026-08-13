@@ -1,11 +1,15 @@
 #pragma once
-#include "llama.h"
+// [MINI-V 삭제] #include "llama.h"
 #include <functional>
 #include <string>
 
+struct llama_model;
+struct llama_context;
+struct llama_sampler;
+
+
 namespace miniv::ai {
 
-// 세션/멀티턴 없음 — 단일 그래프, 단발 질문만 지원 (§1, §3-3)
 class NpuLLMEngine {
 public:
   using TokenCallback = std::function<void(const std::string &tokenText)>;

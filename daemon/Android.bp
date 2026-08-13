@@ -1,10 +1,12 @@
-cc_library_static {
+cc_library_shared {
     name: "libnpu-engine-miniv",
     defaults: ["miniv_ai_defaults"],
+    vendor: true,
     srcs: ["src/npu_llm_engine.cpp"],
     local_include_dirs: ["include"],
     include_dirs: ["vendor/mini-v/ai/prebuilts/npu/include"],
     shared_libs: ["libllama-npu-prebuilt-linked"],
+    export_include_dirs: ["include"],
 }
 
 cc_binary {
@@ -20,11 +22,11 @@ cc_binary {
     static_libs: [
         "libllama-miniv",
         "vendor-miniv-ai-aidl-V1-ndk",
-        "libnpu-engine-miniv",
     ],
     shared_libs: [
         "libbinder_ndk",
         "libllama-npu-prebuilt-linked",
+        "libnpu-engine-miniv",
     ],
     ldflags: ["-Wl,--exclude-libs,ALL"],
     required: [
