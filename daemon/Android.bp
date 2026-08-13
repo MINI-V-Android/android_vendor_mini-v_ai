@@ -10,27 +10,22 @@ cc_library_static {
 cc_binary {
     name: "ai_daemon",
     defaults: ["miniv_ai_defaults"],
-
     srcs: [
         "main.cpp",
         "src/llm_engine.cpp",
         "src/session_manager.cpp",
         "src/hal_service.cpp",
     ],
-
     local_include_dirs: ["include"],
-
     static_libs: [
         "libllama-miniv",
         "vendor-miniv-ai-aidl-V1-ndk",
         "libnpu-engine-miniv",
     ],
-
     shared_libs: [
         "libbinder_ndk",
         "libllama-npu-prebuilt-linked",
     ],
-
     required: [
         "libggml-base-npu-prebuilt",
         "libggml-npu-prebuilt",
@@ -39,16 +34,10 @@ cc_binary {
         "libllama-npu-prebuilt",
         "libhtp-ops-npu-prebuilt",
         "libhtp-ops-skel-npu-prebuilt",
-        // >>> MINI-V 추가 시작 (이슈 #40/#41 — libllama.so DT_NEEDED 재귀 체인
-        // 표준경로 해석용, 전체 세트로 한 번에 커버)
         "libggml-base-npu-prebuilt-linked",
-        "libggml-npu-prebuilt-linked",
         "libggml-cpu-npu-prebuilt-linked",
         "libggml-htp-npu-prebuilt-linked",
-        "libllama-npu-prebuilt-linked",
-        "libhtp-ops-npu-prebuilt-linked",
-        // <<< MINI-V 추가 끝
+        "libggml-npu-prebuilt-linked",
     ],
-
     init_rc: ["etc/init.mini-v-ai.rc"],
 }

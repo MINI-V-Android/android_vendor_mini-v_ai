@@ -53,23 +53,18 @@ cc_prebuilt_library_shared {
     stem: "libllama",
 }
 
-// ── 표준 경로용 (/vendor/lib64/, DT_NEEDED 재귀 해석 대상 — 이슈 #40/#41) ──
-// libllama.so가 이 체인(libggml → libggml-base, libggml-htp, ...)을
-// 전부 DT_NEEDED로 직접 물고 있는 것으로 확인됨(실기기 CANNOT LINK 로그).
-// dlopen 스캔용과 별개로, 6개 전부 표준 경로에도 중복 설치해 재귀 해석을
-// 한 번에 끝냄. 동일 바이트(같은 srcs) + 동일 SONAME이라 런타임에 이미
-// 로드된 인스턴스를 재사용하므로 중복 로드/심볼 충돌 없음.
+// ── 표준 경로용 (/vendor/lib64/) ──
+// 실기기 readelf -d로 확인한 실제 NEEDED 재귀 체인:
+//   libllama.so → libggml.so → libggml-htp.so → libggml-cpu.so → libggml-base.so
+// 이 닫힌 집합(5개)만 표준 경로에 중복 설치하면 ai_daemon 링크가 끝까지 해석됨.
+// libhtp_ops.so는 이 NEEDED 체인 어디에도 안 나타남(dlopen 전용 백엔드
+// 플러그인이라 링크 타임엔 등장 안 함) — 표준 경로에 넣을 필요 없음.
+// 동일 srcs(같은 바이트, 같은 SONAME)라 런타임 중복 로드/심볼 충돌 없음.
 cc_prebuilt_library_shared {
     name: "libggml-base-npu-prebuilt-linked",
     defaults: ["miniv_npu_prebuilt_defaults"],
     srcs: ["lib64/libggml-base.so"],
     stem: "libggml-base",
-}
-cc_prebuilt_library_shared {
-    name: "libggml-npu-prebuilt-linked",
-    defaults: ["miniv_npu_prebuilt_defaults"],
-    srcs: ["lib64/libggml.so"],
-    stem: "libggml",
 }
 cc_prebuilt_library_shared {
     name: "libggml-cpu-npu-prebuilt-linked",
@@ -84,10 +79,10 @@ cc_prebuilt_library_shared {
     stem: "libggml-htp",
 }
 cc_prebuilt_library_shared {
-    name: "libhtp-ops-npu-prebuilt-linked",
+    name: "libggml-npu-prebuilt-linked",
     defaults: ["miniv_npu_prebuilt_defaults"],
-    srcs: ["lib64/libhtp_ops.so"],
-    stem: "libhtp_ops",
+    srcs: ["lib64/libggml.so"],
+    stem: "libggml",
 }
 cc_prebuilt_library_shared {
     name: "libllama-npu-prebuilt-linked",
