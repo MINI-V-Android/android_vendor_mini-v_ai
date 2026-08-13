@@ -5,7 +5,10 @@ cc_library_shared {
     srcs: ["src/npu_llm_engine.cpp"],
     local_include_dirs: ["include"],
     include_dirs: ["vendor/mini-v/ai/prebuilts/npu/include"],
-    shared_libs: ["libllama-npu-prebuilt-linked"],
+    shared_libs: [
+        "libllama-npu-prebuilt-linked",
+        "libggml-npu-prebuilt-linked",
+    ],
     export_include_dirs: ["include"],
 }
 
