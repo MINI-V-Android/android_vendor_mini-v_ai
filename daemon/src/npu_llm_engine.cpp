@@ -25,6 +25,17 @@ bool NpuLLMEngine::load(const std::string &modelPath,
     // HTP 백엔드를 스캔 -> dlopen
     ggml_backend_load_all_from_path(backendLibDir.c_str());
     mBackendsLoaded = true;
+    
+    {
+      size_t devCount = ggml_backend_dev_count();
+      LOGI("registered backend devices: %zu", devCount);
+      for (size_t d = 0; d < devCount; ++d) {
+        ggml_backend_dev_t dev = ggml_backend_dev_get(d);
+        LOGI("  device[%zu]: name=%s desc=%s type=%d", d,
+             ggml_backend_dev_name(dev), ggml_backend_dev_description(dev),
+             (int)ggml_backend_dev_type(dev));
+      }
+    }
 
     llama_model_params mparams = llama_model_default_params();
     // 백엔드(HTP)가 있으면 그쪽으로 최대한 레이어를 오프로드
@@ -41,7 +52,7 @@ bool NpuLLMEngine::load(const std::string &modelPath,
     cparams.n_ctx = nCtx;
     cparams.n_threads = nThreads;
     cparams.n_threads_batch = nThreads;
-    cparams.flash_attn = true;
+    cparams.flash_attn = false; //TEST용
 
     mCtx = llama_new_context_with_model(mModel, cparams);
     if (!mCtx) {
@@ -49,21 +60,6 @@ bool NpuLLMEngine::load(const std::string &modelPath,
         return false;
     }
 
-  {
-    float *logits = llama_get_logits(mCtx);
-    if (!logits) {
-      LOGE("llama_get_logits returned NULL");
-    } else {
-      LOGI("logits[0..4] = %f %f %f %f %f", logits[0], logits[1], logits[2],
-           logits[3], logits[4]);
-      float maxVal = logits[0];
-      int maxIdx = 0;
-      for (int v = 1; v < 151936; ++v) {
-        if (logits[v] > maxVal) { maxVal = logits[v]; maxIdx = v; }
-      }
-      LOGI("manual argmax: idx=%d val=%f", maxIdx, maxVal);
-    }
-  }
     // 샘플러는 CPU 엔진과 동일한 값 사용 (§5-2 문서 기준, 잠정치)
     auto sparams = llama_sampler_chain_default_params();
     mSampler = llama_sampler_chain_init(sparams);
@@ -103,6 +99,22 @@ bool NpuLLMEngine::infer(const std::string &prompt, int maxTokens,
     LOGE("prefill llama_decode failed");
     return false;
   }
+
+    {
+        float *logits = llama_get_logits(mCtx);
+        if (!logits) {
+        LOGE("llama_get_logits returned NULL");
+        } else {
+        LOGI("logits[0..4] = %f %f %f %f %f", logits[0], logits[1], logits[2],
+            logits[3], logits[4]);
+        float maxVal = logits[0];
+        int maxIdx = 0;
+        for (int v = 1; v < 151936; ++v) {
+            if (logits[v] > maxVal) { maxVal = logits[v]; maxIdx = v; }
+        }
+        LOGI("manual argmax: idx=%d val=%f", maxIdx, maxVal);
+        }
+    }
 
   for (int i = 0; i < maxTokens; ++i) {
     llama_token tok = llama_sampler_sample(mSampler, mCtx, -1);
