@@ -1,47 +1,74 @@
-cc_library_static {
-    name: "libnpu-engine-miniv",
-    defaults: ["miniv_ai_defaults"],
-    srcs: ["src/npu_llm_engine.cpp"],
-    local_include_dirs: ["include"],
-    include_dirs: ["vendor/mini-v/ai/prebuilts/npu/include"],
-    shared_libs: ["libllama-npu-prebuilt"],
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-cc_binary {
-    name: "ai_daemon",
-    defaults: ["miniv_ai_defaults"],
+cc_defaults {
+    name: "miniv_npu_prebuilt_defaults",
+    vendor: true,
+    check_elf_files: false, 
+    strip: { none: true },
+}
 
-    srcs: [
-        "main.cpp",
-        "src/llm_engine.cpp",
-        "src/session_manager.cpp",
-        "src/hal_service.cpp",
-    ],
+cc_prebuilt_library_shared {
+    name: "libggml-base-npu-prebuilt",
+    defaults: ["miniv_npu_prebuilt_defaults"],
+    srcs: ["lib64/libggml-base.so"],
+    relative_install_path: "miniv-npu",
+    stem: "libggml-base",
+}
 
-    local_include_dirs: ["include"],
+cc_prebuilt_library_shared {
+    name: "libggml-npu-prebuilt",
+    defaults: ["miniv_npu_prebuilt_defaults"],
+    srcs: ["lib64/libggml.so"],
+    relative_install_path: "miniv-npu",
+    stem: "libggml",
+}
 
-    static_libs: [
-        "libllama-miniv",
-        "vendor-miniv-ai-aidl-V1-ndk",
-        "libnpu-engine-miniv",
-    ],
+cc_prebuilt_library_shared {
+    name: "libggml-cpu-npu-prebuilt",
+    defaults: ["miniv_npu_prebuilt_defaults"],
+    srcs: ["lib64/libggml-cpu.so"],
+    relative_install_path: "miniv-npu",
+    stem: "libggml-cpu",
+}
 
-    shared_libs: [
-        "libbinder_ndk",
-        "libllama-npu-prebuilt", 
-    ],
+cc_prebuilt_library_shared {
+    name: "libggml-htp-npu-prebuilt",
+    defaults: ["miniv_npu_prebuilt_defaults"],
+    srcs: ["lib64/libggml-htp.so"],
+    relative_install_path: "miniv-npu",
+    stem: "libggml-htp",
+}
 
-    required: [
-        "libggml-base-npu-prebuilt",
-        "libggml-npu-prebuilt",
-        "libggml-cpu-npu-prebuilt",
-        "libggml-htp-npu-prebuilt",
-        "libllama-npu-prebuilt",
-        "libhtp-ops-npu-prebuilt",
-        "libhtp-ops-skel-npu-prebuilt",
-    ],
-    
-    init_rc: [
-        "etc/init.mini-v-ai.rc",
-    ],
+cc_prebuilt_library_shared {
+    name: "libhtp-ops-npu-prebuilt",
+    defaults: ["miniv_npu_prebuilt_defaults"],
+    srcs: ["lib64/libhtp_ops.so"],
+    relative_install_path: "miniv-npu",
+    stem: "libhtp_ops",
+}
+
+cc_prebuilt_library_shared {
+    name: "libllama-npu-prebuilt",
+    defaults: ["miniv_npu_prebuilt_defaults"],
+    srcs: ["lib64/libllama.so"],
+    relative_install_path: "miniv-npu",
+    stem: "libllama",
+}
+
+cc_prebuilt_library_shared {
+    name: "libllama-npu-prebuilt-linked",
+    defaults: ["miniv_npu_prebuilt_defaults"],
+    srcs: ["lib64/libllama.so"],
+    // /vendor/lib64/ 표준 경로에 그대로 설치
+    stem: "libllama",
+}
+
+cc_prebuilt_library_shared {
+    name: "libhtp-ops-skel-npu-prebuilt",
+    defaults: ["miniv_npu_prebuilt_defaults"],
+    srcs: ["dsp/libhtp_ops_skel.so"],
+    relative_install_path: "rfsa/adsp",
+    stem: "libhtp_ops_skel",
 }
