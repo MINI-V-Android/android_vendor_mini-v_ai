@@ -1,4 +1,5 @@
 #include "npu_llm_engine.h"
+#include "llama.h"
 
 #include <android/log.h>
 #include <vector>

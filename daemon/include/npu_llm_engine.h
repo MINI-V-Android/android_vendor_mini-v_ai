@@ -1,5 +1,4 @@
 #pragma once
-// [MINI-V 삭제] #include "llama.h"
 #include <functional>
 #include <string>
 
