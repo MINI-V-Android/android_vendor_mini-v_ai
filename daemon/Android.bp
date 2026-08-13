@@ -8,6 +8,7 @@ cc_library_shared {
     shared_libs: [
         "libllama-npu-prebuilt-linked",
         "libggml-npu-prebuilt-linked",
+        "libggml-base-npu-prebuilt-linked",
     ],
     export_include_dirs: ["include"],
 }
