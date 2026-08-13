@@ -66,6 +66,20 @@ cc_prebuilt_library_shared {
 }
 
 cc_prebuilt_library_shared {
+    name: "libggml-npu-prebuilt-linked",
+    defaults: ["miniv_npu_prebuilt_defaults"],
+    srcs: ["lib64/libggml.so"],
+    stem: "libggml",
+}
+
+cc_prebuilt_library_shared {
+    name: "libggml-base-npu-prebuilt-linked",
+    defaults: ["miniv_npu_prebuilt_defaults"],
+    srcs: ["lib64/libggml-base.so"],
+    stem: "libggml-base",
+}
+
+cc_prebuilt_library_shared {
     name: "libhtp-ops-skel-npu-prebuilt",
     defaults: ["miniv_npu_prebuilt_defaults"],
     srcs: ["dsp/libhtp_ops_skel.so"],
