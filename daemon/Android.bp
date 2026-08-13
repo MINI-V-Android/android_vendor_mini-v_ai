@@ -39,6 +39,8 @@ cc_binary {
         "libllama-npu-prebuilt",
         "libhtp-ops-npu-prebuilt",
         "libhtp-ops-skel-npu-prebuilt",
+        "libggml-npu-prebuilt-linked",
+        "libggml-base-npu-prebuilt-linked",
     ],
 
     init_rc: ["etc/init.mini-v-ai.rc"],
