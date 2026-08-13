@@ -1,3 +1,12 @@
+cc_library_static {
+    name: "libnpu-engine-miniv",
+    defaults: ["miniv_ai_defaults"],
+    srcs: ["src/npu_llm_engine.cpp"],
+    local_include_dirs: ["include"],
+    include_dirs: ["vendor/mini-v/ai/prebuilts/npu/include"],
+    shared_libs: ["libllama-npu-prebuilt-linked"],
+}
+
 cc_binary {
     name: "ai_daemon",
     defaults: ["miniv_ai_defaults"],
@@ -5,18 +14,32 @@ cc_binary {
     srcs: [
         "main.cpp",
         "src/llm_engine.cpp",
+        "src/session_manager.cpp",
+        "src/hal_service.cpp",
     ],
 
     local_include_dirs: ["include"],
 
     static_libs: [
-        "libllama-prebuilt",
-        "libggml-prebuilt",
-        "libggml-base-prebuilt",
-        "libggml-cpu-prebuilt",
+        "libllama-miniv",
+        "vendor-miniv-ai-aidl-V1-ndk",
+        "libnpu-engine-miniv",
     ],
 
-    init_rc: [
-        "etc/init.mini-v-ai.rc",
+    shared_libs: [
+        "libbinder_ndk",
+        "libllama-npu-prebuilt-linked",
     ],
+
+    required: [
+        "libggml-base-npu-prebuilt",
+        "libggml-npu-prebuilt",
+        "libggml-cpu-npu-prebuilt",
+        "libggml-htp-npu-prebuilt",
+        "libllama-npu-prebuilt",
+        "libhtp-ops-npu-prebuilt",
+        "libhtp-ops-skel-npu-prebuilt",
+    ],
+
+    init_rc: ["etc/init.mini-v-ai.rc"],
 }
