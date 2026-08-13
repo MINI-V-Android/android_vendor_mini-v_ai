@@ -157,59 +157,6 @@ int main(int argc, char **argv) {
     }
     fclose(rf);
     return 0;
-
-} else if (argc >= 3 && strcmp(argv[1], "npu_load") == 0) {
-    // 사용법: ai_daemon_cli npu_load <modelPath> <backendDir> <nCtx> <nThreads>
-    if (argc < 6) {
-      fprintf(stderr,
-              "usage: ai_daemon_cli npu_load <modelPath> <backendDir> "
-              "<nCtx> <nThreads>\n");
-      close(fd);
-      return 1;
-    }
-    std::string cmd = std::string("NPU_LOAD ") + argv[2] + " " + argv[3] +
-                       " " + argv[4] + " " + argv[5] + "\n";
-    SendAndReadLine(fd, cmd);
-
-  } else if (argc >= 3 && strcmp(argv[1], "npu_infer") == 0) {
-    // 사용법: ai_daemon_cli npu_infer "<prompt>" <maxTokens>
-    if (argc < 4) {
-      fprintf(stderr, "usage: ai_daemon_cli npu_infer <prompt> <maxTokens>\n");
-      close(fd);
-      return 1;
-    }
-    std::string prompt = argv[2];
-    int maxTokens = atoi(argv[3]);
-
-    dprintf(fd, "NPU_INFER %d\n%s\nEND\n", maxTokens, prompt.c_str());
-
-    FILE *rf = fdopen(fd, "r");
-    if (!rf) {
-      close(fd);
-      return 1;
-    }
-
-    char line[4096];
-    while (fgets(line, sizeof(line), rf)) {
-      if (strncmp(line, "TOKEN ", 6) == 0) {
-        std::string tokenLine(line + 6);
-        if (!tokenLine.empty() && tokenLine.back() == '\n') {
-          tokenLine.pop_back();
-        }
-        std::string decoded = base64Decode(tokenLine);
-        printf("%s", decoded.c_str());
-        fflush(stdout);
-      } else if (strncmp(line, "DONE", 4) == 0) {
-        printf("\n[DONE]\n");
-        break;
-      } else if (strncmp(line, "ERROR", 5) == 0) {
-        printf("\n[ERROR] %s", line + 6);
-        break;
-      }
-    }
-    fclose(rf);
-    return 0;
-
   } else if (argc >= 3 && strcmp(argv[1], "create_session") == 0) {
     SendAndReadLine(fd, std::string("CREATE_SESSION ") + argv[2] + "\n");
 
