@@ -173,10 +173,9 @@ int main(int argc, char **argv) {
   mkdir("/data/vendor/miniv_ai", 0700);
   mkdir("/data/vendor/miniv_ai/sessions", 0700);
 
-  if (!gEngine.load("/data/local/tmp/model.gguf", /*nCtx=*/2048,
-                    /*nThreads=*/4)) {
-    LOG(ERROR) << "model load failed, exiting";
-    // return 1;
+  if (!gEngine.load("/data/local/tmp/model.gguf", 2048, 4)) {
+    LOG(ERROR) << "CPU model load failed, but continuing for NPU/UDS debug";
+    // return 1;  <-- 이 부분만 주석 처리
   }
 
   // ── HAL 등록 (신규, §11-c) ──────────────────────────────────
