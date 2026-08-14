@@ -39,8 +39,7 @@ bool NpuLLMEngine::load(const std::string &modelPath,
     }
 
     llama_model_params mparams = llama_model_default_params();
-    // 백엔드(HTP)가 있으면 그쪽으로 최대한 레이어를 오프로드
-    mparams.n_gpu_layers = 999;
+    mparams.n_gpu_layers = 0;
 
     mModel = llama_load_model_from_file(modelPath.c_str(), mparams);
     if (!mModel) {
@@ -53,7 +52,7 @@ bool NpuLLMEngine::load(const std::string &modelPath,
     cparams.n_ctx = nCtx;
     cparams.n_threads = nThreads;
     cparams.n_threads_batch = nThreads;
-    cparams.flash_attn = true;
+    cparams.flash_attn = false;
 
     cparams.n_batch = 2048;
     cparams.n_ubatch = 512;
@@ -108,7 +107,13 @@ bool NpuLLMEngine::infer(const std::string &prompt, int maxTokens,
                  nPromptTokens, true, true);
 
   LOGI("tokenized: nPromptTokens=%d", nPromptTokens);
-
+    {   
+    std::string tokStr;
+    for (int i = 0; i < nPromptTokens; ++i) {
+      tokStr += std::to_string(promptTokens[i]) + " ";
+    }
+    LOGI("prompt token ids: %s", tokStr.c_str());
+  }
   // 이슈 #44 최종 — llama_batch_init 수동 구성을 버리고, 정상 동작이 검증된
   // llama-cli와 동일하게 llama_batch_get_one 사용. 이 헬퍼는 pos/seq_id/logits를
   // 전부 nullptr로 두고, llama_decode 내부가 자동으로 채움(pos는 KV 상태 기반,
