@@ -106,54 +106,39 @@ bool NpuLLMEngine::infer(const std::string &prompt, int maxTokens,
 
   LOGI("tokenized: nPromptTokens=%d", nPromptTokens);
 
-  // 이슈 #44 — llama_batch_get_one()의 "logits=NULL이면 마지막 토큰만
-  // 암묵적으로 출력"이라는 경로가 이 포크의 ACCEL(HTP) 스케줄링에서
-  // 안 타는 것으로 강하게 의심됨(llama_synchronize 추가해도 결과 불변,
-  // 즉 "안 끝난 연산을 늦게 읽음"이 아니라 "연산 자체가 그래프에서 빠짐").
-  // llama_batch_init()으로 직접 구성 + logits[last]=1을 명시적으로 세팅해
-  // 이 암묵 경로 자체를 우회.
-  llama_batch batch = llama_batch_init(nPromptTokens, 0, 1);
-  for (int i = 0; i < nPromptTokens; ++i) {
-    batch.token[i]     = promptTokens[i];
-    batch.pos[i]       = i;
-    batch.n_seq_id[i]  = 1;
-    batch.seq_id[i][0] = 0;
-    batch.logits[i]    = (i == nPromptTokens - 1) ? 1 : 0;
-  }
-  batch.n_tokens = nPromptTokens;
-
-  if (llama_decode(mCtx, batch) != 0) {
-    LOGE("prefill llama_decode failed");
-    llama_batch_free(batch);
-    return false;
+  // 이슈 #44 최종 — llama_batch_init 수동 구성을 버리고, 정상 동작이 검증된
+  // llama-cli와 동일하게 llama_batch_get_one 사용. 이 헬퍼는 pos/seq_id/logits를
+  // 전부 nullptr로 두고, llama_decode 내부가 자동으로 채움(pos는 KV 상태 기반,
+  // logits=nullptr이면 "마지막 토큰만" 경로 → n_outputs=1). 수동 구성이 이
+  // 자동 경로를 벗어나게 만든 것이 logits=0의 원인으로 판단.
+  {
+    llama_batch batch = llama_batch_get_one(promptTokens.data(), nPromptTokens);
+    if (llama_decode(mCtx, batch) != 0) {
+      LOGE("prefill llama_decode failed");
+      return false;
+    }
   }
   llama_synchronize(mCtx);
 
+  // 진단: llama_get_logits_ith(-1) 사용 (n_outputs 검증까지 포함, llama-cli와 동일)
   {
-    float *logits = llama_get_logits(mCtx);
+    float *logits = llama_get_logits_ith(mCtx, -1);
     if (!logits) {
-      LOGE("llama_get_logits returned NULL");
+      LOGE("llama_get_logits_ith(-1) returned NULL");
     } else {
       LOGI("logits[0..4] = %f %f %f %f %f", logits[0], logits[1], logits[2],
            logits[3], logits[4]);
-      float maxVal = logits[0];
-      int maxIdx = 0;
-      for (int v = 1; v < 151936; ++v) {
-        if (logits[v] > maxVal) { maxVal = logits[v]; maxIdx = v; }
-      }
-      LOGI("manual argmax: idx=%d val=%f", maxIdx, maxVal);
     }
   }
 
-  llama_batch_free(batch);
-  int nPast = nPromptTokens;   // llama_batch_init은 위치 자동추적 없음 — 직접 관리
+  int nPast = nPromptTokens;
 
   for (int i = 0; i < maxTokens; ++i) {
     llama_token tok = llama_sampler_sample(mSampler, mCtx, -1);
     llama_sampler_accept(mSampler, tok);
 
     if (i < 3) {
-      LOGI("token[%d]: id=%d, n_vocab=%d", i, tok, llama_n_vocab(mModel));
+      LOGI("token[%d]: id=%d", i, tok);
     }
 
     if (llama_token_is_eog(mModel, tok)) {
@@ -165,19 +150,13 @@ bool NpuLLMEngine::infer(const std::string &prompt, int maxTokens,
     int n = llama_token_to_piece(mModel, tok, buf, sizeof(buf), 0, true);
     onToken(std::string(buf, n));
 
-    llama_batch nextBatch = llama_batch_init(1, 0, 1);
-    nextBatch.token[0]     = tok;
-    nextBatch.pos[0]       = nPast;
-    nextBatch.n_seq_id[0]  = 1;
-    nextBatch.seq_id[0][0] = 0;
-    nextBatch.logits[0]    = 1;
-    nextBatch.n_tokens     = 1;
-
-    bool decodeOk = llama_decode(mCtx, nextBatch) == 0;
-    llama_batch_free(nextBatch);
-    if (!decodeOk) {
-      LOGE("decode loop failed at i=%d", i);
-      break;
+    // 다음 토큰도 동일하게 llama_batch_get_one 사용 (llama-cli와 동일)
+    {
+      llama_batch batch = llama_batch_get_one(&tok, 1);
+      if (llama_decode(mCtx, batch) != 0) {
+        LOGE("decode loop failed at i=%d", i);
+        break;
+      }
     }
     llama_synchronize(mCtx);
     nPast++;
