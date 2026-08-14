@@ -20,6 +20,13 @@ NpuLLMEngine::~NpuLLMEngine() {
 bool NpuLLMEngine::load(const std::string &modelPath,
                          const std::string &backendLibDir, int nCtx,
                          int nThreads) {
+    setenv("DSP_LIBRARY_PATH", "/vendor/lib64/rfsa/adsp", 1);std::string htpOpsPath = backendLibDir + "/libhtp_ops.so";
+    void* handle = dlopen(htpOpsPath.c_str(), RTLD_NOW | RTLD_GLOBAL);
+    if (!handle) {
+        LOGE("Failed to preload HTP ops: %s", dlerror());
+    } else {
+        LOGI("Successfully preloaded HTP ops from: %s", htpOpsPath.c_str());
+    }
     llama_backend_init();
 
     // HTP 백엔드를 스캔 -> dlopen

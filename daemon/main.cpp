@@ -176,7 +176,7 @@ int main(int argc, char **argv) {
   if (!gEngine.load("/data/local/tmp/model.gguf", /*nCtx=*/2048,
                     /*nThreads=*/4)) {
     LOG(ERROR) << "model load failed, exiting";
-    return 1;
+    // return 1;
   }
 
   // ── HAL 등록 (신규, §11-c) ──────────────────────────────────

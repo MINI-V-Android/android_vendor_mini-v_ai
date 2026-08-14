@@ -2,8 +2,7 @@ service miniv_ai /vendor/bin/ai_daemon
     class hal
     user system
     group system
-    socket miniv_ai stream 0660 system systemenv 
-    env DSP_LIBRARY_PATH /vendor/lib64/rfsa/adsp
+    socket miniv_ai stream 0660 system system
     disabled
     seclabel u:r:miniv_ai:s0
 
