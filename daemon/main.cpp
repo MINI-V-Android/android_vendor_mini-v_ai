@@ -175,7 +175,7 @@ int main(int argc, char **argv) {
 
   if (!gEngine.load("/data/local/tmp/model.gguf", 2048, 4)) {
     LOG(ERROR) << "CPU model load failed, but continuing for NPU/UDS debug";
-    // return 1;  <-- 이 부분만 주석 처리
+    return 1;
   }
 
   // ── HAL 등록 (신규, §11-c) ──────────────────────────────────
