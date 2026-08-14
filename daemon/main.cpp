@@ -16,12 +16,12 @@
 #include "base64_util.h"
 #include "llm_engine.h"
 #include "npu_llm_engine.h"
-#include "hal_service.h"               
+#include "hal_service.h"
 
-#include <android/binder_ibinder.h>     
-#include <android/binder_manager.h>     
-#include <android/binder_process.h>     
-#include <memory>                       
+#include <android/binder_ibinder.h>
+#include <android/binder_manager.h>
+#include <android/binder_process.h>
+#include <memory>
 
 namespace {
 
@@ -153,7 +153,7 @@ void HandleClient(int clientFd) {
 
       fprintf(wf, ok ? "DONE\n" : "ERROR NPU_INFER_FAILED\n");
       fflush(wf);
-      
+
     } else if (cmd.rfind("HELLO", 0) == 0) {
       fprintf(wf, "HELLO from miniv_ai\n");
       fflush(wf);

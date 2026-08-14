@@ -25,7 +25,7 @@ bool NpuLLMEngine::load(const std::string &modelPath,
     // HTP 백엔드를 스캔 -> dlopen
     ggml_backend_load_all_from_path(backendLibDir.c_str());
     mBackendsLoaded = true;
-    
+
     {
       size_t devCount = ggml_backend_dev_count();
       LOGI("registered backend devices: %zu", devCount);
@@ -39,7 +39,7 @@ bool NpuLLMEngine::load(const std::string &modelPath,
 
     llama_model_params mparams = llama_model_default_params();
     // 백엔드(HTP)가 있으면 그쪽으로 최대한 레이어를 오프로드
-    mparams.n_gpu_layers = 999;
+    mparams.n_gpu_layers = 0;
 
     mModel = llama_load_model_from_file(modelPath.c_str(), mparams);
     if (!mModel) {
@@ -52,7 +52,10 @@ bool NpuLLMEngine::load(const std::string &modelPath,
     cparams.n_ctx = nCtx;
     cparams.n_threads = nThreads;
     cparams.n_threads_batch = nThreads;
-    cparams.flash_attn = true; 
+    cparams.flash_attn = true;
+
+    cparams.n_batch = 2048;
+    cparams.n_ubatch = 512;
 
     mCtx = llama_new_context_with_model(mModel, cparams);
     if (!mCtx) {
@@ -153,6 +156,9 @@ bool NpuLLMEngine::infer(const std::string &prompt, int maxTokens,
     // 다음 토큰도 동일하게 llama_batch_get_one 사용 (llama-cli와 동일)
     {
       llama_batch batch = llama_batch_get_one(&tok, 1);
+      if (batch.pos) batch.pos[0] = nPast;
+      if (batch.seq_id) batch.seq_id[0][0] = 0;
+      if (batch.logits) batch.logits[0] = 1;
       if (llama_decode(mCtx, batch) != 0) {
         LOGE("decode loop failed at i=%d", i);
         break;
