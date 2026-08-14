@@ -173,11 +173,15 @@ int main(int argc, char **argv) {
   mkdir("/data/vendor/miniv_ai", 0700);
   mkdir("/data/vendor/miniv_ai/sessions", 0700);
 
-  if (!gEngine.load("/data/local/tmp/model.gguf", 2048, 4)) {
-    LOG(ERROR) << "CPU model load failed, but continuing for NPU/UDS debug";
+  // if (!gEngine.load("/data/local/tmp/model.gguf", 2048, 4)) {
+  //   LOG(ERROR) << "CPU model load failed, but continuing for NPU/UDS debug";
+  //   return 1;
+  // }
+  bool skipCpuEngineForTest = true;
+  if (!skipCpuEngineForTest && !gEngine.load("/data/local/tmp/model.gguf", /*nCtx=*/2048, /*nThreads=*/4)) {
+    LOG(ERROR) << "CPU model load failed";
     return 1;
   }
-
   // ── HAL 등록 (신규, §11-c) ──────────────────────────────────
   // UDS accept 루프는 계속 메인 스레드 blocking으로 돌고, HAL은
   // libbinder의 별도 스레드풀에서 처리되므로 서로 간섭하지 않음.
