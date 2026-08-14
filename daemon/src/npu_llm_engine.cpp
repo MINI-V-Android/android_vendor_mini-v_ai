@@ -63,7 +63,6 @@ bool NpuLLMEngine::load(const std::string &modelPath,
         return false;
     }
 
-    // 샘플러는 CPU 엔진과 동일한 값 사용 (§5-2 문서 기준, 잠정치)
     auto sparams = llama_sampler_chain_default_params();
     mSampler = llama_sampler_chain_init(sparams);
     llama_sampler_chain_add(mSampler, llama_sampler_init_greedy());

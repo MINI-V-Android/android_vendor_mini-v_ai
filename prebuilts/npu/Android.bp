@@ -42,7 +42,7 @@ cc_prebuilt_library_shared {
     name: "libhtp-ops-npu-prebuilt",
     defaults: ["miniv_npu_prebuilt_defaults"],
     srcs: ["lib64/libhtp_ops.so"],
-    relative_install_path: "miniv-npu",
+    //relative_install_path: "miniv-npu",
     stem: "libhtp_ops",
 }
 cc_prebuilt_library_shared {

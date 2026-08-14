@@ -3,8 +3,7 @@ service miniv_ai /vendor/bin/ai_daemon
     user system
     group system
     socket miniv_ai stream 0660 system systemenv 
-    LD_LIBRARY_PATH /vendor/lib64/miniv-npu:/vendor/lib64:/system/lib64
-    env DSP_LIBRARY_PATH /vendor/lib64/rfsa/adsp
+    setenv DSP_LIBRARY_PATH /vendor/lib64/rfsa/adsp
     disabled
     seclabel u:r:miniv_ai:s0
 
