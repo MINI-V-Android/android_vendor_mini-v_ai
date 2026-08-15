@@ -1,6 +1,8 @@
 #include "npu_llm_engine.h"
 #include "llama.h"
 
+#include <dlfcn.h>
+
 #include <android/log.h>
 #include <vector>
 
@@ -124,7 +126,6 @@ bool NpuLLMEngine::infer(const std::string &prompt, int maxTokens,
 
     // FOR DEBUG
     // - Checking for which .so is referenced
-    #include <dlfcn.h>
     Dl_info info;
     if (dladdr((void*)&llama_decode, &info) && info.dli_fname) {
       fprintf(stderr, "NpuLLMEngine: DIAG llama_decode resolved from: %s\n", info.dli_fname);
