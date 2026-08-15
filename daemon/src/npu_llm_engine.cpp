@@ -6,9 +6,31 @@
 #include <android/log.h>
 #include <vector>
 
+// FOR DEBUG: Custom file based MINI-V Logger
+#include <cstdio>
+namespace miniv::ai {
+static void miniv_file_log(const char *level, const char *msg) {
+  FILE *f = fopen("/data/vendor/miniv_ai/debug.log", "a");
+  if (f) {
+    fprintf(f, "[%s] %s\n", level, msg);
+    fclose(f);
+  }
+}
+}
+
 #define LOG_TAG "NpuLLMEngine"
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+#define LOGI(...) do { \
+  __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__); \
+  char miniv_logbuf[1024]; \
+  snprintf(miniv_logbuf, sizeof(miniv_logbuf), __VA_ARGS__); \
+  ::miniv::ai::miniv_file_log("I", miniv_logbuf); \
+} while (0)
+#define LOGE(...) do { \
+  __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__); \
+  char miniv_logbuf[1024]; \
+  snprintf(miniv_logbuf, sizeof(miniv_logbuf), __VA_ARGS__); \
+  ::miniv::ai::miniv_file_log("E", miniv_logbuf); \
+} while (0)
 
 namespace miniv::ai {
 
