@@ -121,6 +121,21 @@ bool NpuLLMEngine::infer(const std::string &prompt, int maxTokens,
   // 자동 경로를 벗어나게 만든 것이 logits=0의 원인으로 판단.
   {
     llama_batch batch = llama_batch_get_one(promptTokens.data(), nPromptTokens);
+
+    // FOR DEBUG
+    // - Checking for which .so is referenced
+    #include <dlfcn.h>
+    Dl_info info;
+    if (dladdr((void*)&llama_decode, &info) && info.dli_fname) {
+      fprintf(stderr, "NpuLLMEngine: DIAG llama_decode resolved from: %s\n", info.dli_fname);
+    }
+    if (dladdr((void*)&llama_batch_get_one, &info) && info.dli_fname) {
+      fprintf(stderr, "NpuLLMEngine: DIAG llama_batch_get_one resolved from: %s\n", info.dli_fname);
+    }
+    if (dladdr((void*)&llama_get_logits_ith, &info) && info.dli_fname) {
+      fprintf(stderr, "NpuLLMEngine: DIAG llama_get_logits_ith resolved from: %s\n", info.dli_fname);
+    }
+      
     if (llama_decode(mCtx, batch) != 0) {
       LOGE("prefill llama_decode failed");
       return false;
