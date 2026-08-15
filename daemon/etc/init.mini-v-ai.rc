@@ -5,6 +5,8 @@ service miniv_ai /vendor/bin/ai_daemon
     socket miniv_ai stream 0660 system system
     disabled
     seclabel u:r:miniv_ai:s0
+    ## FOR DEBUG
+    stdio_to_kmsg
 
 on property:vendor.miniv.ai.enabled=1
     mkdir /data/vendor/miniv_ai 0700 system system
