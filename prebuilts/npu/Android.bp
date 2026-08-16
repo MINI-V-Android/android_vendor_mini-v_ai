@@ -91,6 +91,14 @@ cc_prebuilt_library_shared {
     stem: "libllama",
 }
 
+// Qualcomm HTP Operators prebuilt
+cc_prebuilt_library_shared {
+    name: "libhtp-ops-npu-prebuilt-linked",
+    defaults: ["miniv_npu_prebuilt_defaults"],
+    srcs: ["lib64/libhtp_ops.so"],
+    stem: "libhtp_ops",
+}
+
 // Q6DSP(Hexagon) ELF — 기존과 동일, 변경 없음
 cc_prebuilt_library_shared {
     name: "libhtp-ops-skel-npu-prebuilt",
