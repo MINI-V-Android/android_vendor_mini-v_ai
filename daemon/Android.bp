@@ -40,6 +40,7 @@ cc_binary {
         "libggml-htp-npu-prebuilt",
         "libllama-npu-prebuilt",
         "libhtp-ops-npu-prebuilt",
+        "libhtp-ops-npu-prebuilt-linked",
         "libhtp-ops-skel-npu-prebuilt",
         "libggml-base-npu-prebuilt-linked",
         "libggml-cpu-npu-prebuilt-linked",
