@@ -45,6 +45,11 @@ bool NpuLLMEngine::load(const std::string &modelPath,
                          const std::string &backendLibDir, int nCtx,
                          int nThreads) {
     setenv("DSP_LIBRARY_PATH", "/vendor/lib64/rfsa/adsp", 1);
+
+    // FOR DEBUG: stderr output redirect
+    freopen("/data/vendor/miniv_ai/stderr.log", "a", stderr);
+    setvbuf(stderr, nullptr, _IOLBF, 0);
+  
     llama_backend_init();
 
     // HTP 백엔드를 스캔 -> dlopen
