@@ -68,7 +68,7 @@ bool NpuLLMEngine::load(const std::string &modelPath,
     }
 
     llama_model_params mparams = llama_model_default_params();
-    mparams.n_gpu_layers = 0;
+    mparams.n_gpu_layers = 999;
 
     mModel = llama_load_model_from_file(modelPath.c_str(), mparams);
     if (!mModel) {
@@ -81,7 +81,7 @@ bool NpuLLMEngine::load(const std::string &modelPath,
     cparams.n_ctx = nCtx;
     cparams.n_threads = nThreads;
     cparams.n_threads_batch = nThreads;
-    cparams.flash_attn = false;
+    cparams.flash_attn = true;
 
     cparams.n_batch = 2048;
     cparams.n_ubatch = 512;
