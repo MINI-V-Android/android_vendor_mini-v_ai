@@ -1,12 +1,13 @@
 #include "npu_llm_engine.h"
 #include "llama.h"
 
-#include <dlfcn.h>
+// #include <dlfcn.h>
 
 #include <android/log.h>
 #include <vector>
 
-// FOR DEBUG: Custom file based MINI-V Logger
+// Custom file based MINI-V Logger: for Permanant logger
+// 결론(avc denial 전무, permissive에서도 logd 관련 시도 자체 없음 확인).
 #include <cstdio>
 namespace miniv::ai {
 static void miniv_file_log(const char *level, const char *msg) {
@@ -46,7 +47,7 @@ bool NpuLLMEngine::load(const std::string &modelPath,
                          int nThreads) {
     setenv("DSP_LIBRARY_PATH", "/vendor/lib64/rfsa/adsp", 1);
 
-    // FOR DEBUG: stderr output redirect
+    // >>> MINI-V 유지 (라이브러리 내부 fprintf(stderr,...) 로그 확보용)
     freopen("/data/vendor/miniv_ai/stderr.log", "a", stderr);
     setvbuf(stderr, nullptr, _IOLBF, 0);
   
@@ -94,11 +95,11 @@ bool NpuLLMEngine::load(const std::string &modelPath,
 
     auto sparams = llama_sampler_chain_default_params();
     mSampler = llama_sampler_chain_init(sparams);
-    llama_sampler_chain_add(mSampler, llama_sampler_init_greedy());
-    // llama_sampler_chain_add(mSampler, llama_sampler_init_top_k(40));
-    // llama_sampler_chain_add(mSampler, llama_sampler_init_top_p(0.9f, 1));
-    // llama_sampler_chain_add(mSampler, llama_sampler_init_temp(0.7f));
-    // llama_sampler_chain_add(mSampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
+    // llama_sampler_chain_add(mSampler, llama_sampler_init_greedy());
+    llama_sampler_chain_add(mSampler, llama_sampler_init_top_k(40));
+    llama_sampler_chain_add(mSampler, llama_sampler_init_top_p(0.9f, 1));
+    llama_sampler_chain_add(mSampler, llama_sampler_init_temp(0.7f));
+    llama_sampler_chain_add(mSampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
     {
       llama_token bosToken = llama_token_bos(mModel);
       if (bosToken == LLAMA_TOKEN_NULL) {
