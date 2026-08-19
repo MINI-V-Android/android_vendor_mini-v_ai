@@ -122,6 +122,20 @@ bool NpuLLMEngine::load(const std::string &modelPath,
 
             ggml_cgraph* diagGraph = ggml_new_graph(diagCtx);
             ggml_build_forward_expand(diagGraph, dd);
+
+
+            // >>> MINI-V 추가 [MOD-02] (같은 세션 내 반복 호출 시 결과가 바뀌는지 —
+            //     "메시지 채널 첫 사용 시 stale 플래그" 가설 검증. 새 파일/skel 경로
+            //     작업 없이 기존 진단 블록만으로 확인 가능해서 MOD-01보다 먼저 시도)
+            for (int i = 0; i < 3; ++i) {
+                enum ggml_status diagStatus = ggml_backend_graph_compute(diagBackend, diagGraph);
+                std::vector<float> diagResult(32, -1.0f);
+                ggml_backend_tensor_get(dd, diagResult.data(), 0, diagResult.size() * sizeof(float));
+                LOGI("HTP diag [MOD-02] iter=%d status=%d result[0]=%f (expect 32.0)",
+                    i, (int)diagStatus, diagResult[0]);
+            }
+            // <<< MINI-V 추가 끝 [MOD-02]
+
             enum ggml_status diagStatus = ggml_backend_graph_compute(diagBackend, diagGraph);
 
             std::vector<float> diagResult(32, -1.0f);
