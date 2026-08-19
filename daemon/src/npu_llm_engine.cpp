@@ -1,8 +1,6 @@
 #include "npu_llm_engine.h"
 #include "llama.h"
 
-// #include <dlfcn.h>
-
 #include <android/log.h>
 #include <vector>
 
@@ -91,45 +89,7 @@ bool NpuLLMEngine::load(const std::string &modelPath,
     if (!mCtx) {
         LOGE("NPU context init failed");
         return false;
-    } // 8/19확인용
-    {
-        LOGI("=== HTP diag: reusing this process's existing HTP context ===");
-        ggml_backend_reg_t diagReg = ggml_backend_htp_reg();
-        ggml_backend_dev_t diagDev = ggml_backend_reg_dev_get(diagReg, 0);
-        ggml_backend_t diagBackend = ggml_backend_dev_init(diagDev, nullptr);
-        LOGI("HTP diag: backend=%p is_htp=%d", (void*)diagBackend,
-             (int)ggml_backend_is_htp(diagBackend));
-
-        size_t diagCtxSize = ggml_tensor_overhead() * 8 + ggml_graph_overhead();
-        ggml_init_params diagIparams = { diagCtxSize, nullptr, true };
-        ggml_context* diagCtx = ggml_init(diagIparams);
-        ggml_tensor* dw = ggml_new_tensor_2d(diagCtx, GGML_TYPE_F16, 32, 32);
-        ggml_tensor* da = ggml_new_tensor_2d(diagCtx, GGML_TYPE_F32, 32, 1);
-        ggml_tensor* dd = ggml_mul_mat(diagCtx, dw, da);
-
-        ggml_backend_buffer_t diagBuf = ggml_backend_alloc_ctx_tensors(diagCtx, diagBackend);
-        LOGI("HTP diag: buf=%p is_rpcmem=%d", (void*)diagBuf,
-             diagBuf ? (int)ggml_backend_buft_is_rpcmem(ggml_backend_buffer_get_type(diagBuf)) : -1);
-
-        if (diagBuf) {
-            std::vector<uint16_t> dwData(32 * 32, 0x3C00);
-            std::vector<float> daData(32, 1.0f);
-            ggml_backend_tensor_set(dw, dwData.data(), 0, dwData.size() * sizeof(uint16_t));
-            ggml_backend_tensor_set(da, daData.data(), 0, daData.size() * sizeof(float));
-
-            ggml_cgraph* diagGraph = ggml_new_graph(diagCtx);
-            ggml_build_forward_expand(diagGraph, dd);
-
-            enum ggml_status diagStatus = ggml_backend_graph_compute(diagBackend, diagGraph);
-
-            std::vector<float> diagResult(32, -1.0f);
-            ggml_backend_tensor_get(dd, diagResult.data(), 0, diagResult.size() * sizeof(float));
-            LOGI("HTP diag: status=%d result[0]=%f (expect 32.0)", (int)diagStatus, diagResult[0]);
-            ggml_backend_buffer_free(diagBuf);
-        }
-        ggml_free(diagCtx);
-        LOGI("=== HTP diag: done — 지금 이 로그 직전/중 adsprpc CDSP0: 로그 확인할 것 ===");
-    }
+    } 
 
     auto sparams = llama_sampler_chain_default_params();
     mSampler = llama_sampler_chain_init(sparams);
@@ -189,19 +149,6 @@ bool NpuLLMEngine::infer(const std::string &prompt, int maxTokens,
   // 자동 경로를 벗어나게 만든 것이 logits=0의 원인으로 판단.
   {
     llama_batch batch = llama_batch_get_one(promptTokens.data(), nPromptTokens);
-
-    // FOR DEBUG
-    // - Checking for which .so is referenced
-    // Dl_info info;
-    // if (dladdr((void*)&llama_decode, &info) && info.dli_fname) {
-    //   LOGI("DIAG llama_decode resolved from: %s", info.dli_fname);
-    // }
-    // if (dladdr((void*)&llama_batch_get_one, &info) && info.dli_fname) {
-    //   LOGI("DIAG llama_batch_get_one resolved from: %s", info.dli_fname);
-    // }
-    // if (dladdr((void*)&llama_get_logits_ith, &info) && info.dli_fname) {
-    //   LOGI("DIAG llama_get_logits_ith resolved from: %s", info.dli_fname);
-    // }
       
     if (llama_decode(mCtx, batch) != 0) {
       LOGE("prefill llama_decode failed");
