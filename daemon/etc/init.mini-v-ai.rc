@@ -8,7 +8,7 @@ service miniv_ai /vendor/bin/ai_daemon
     ## FOR DEBUG
     stdio_to_kmsg
 
-# >>> MINI-V 임시 추가 (이슈 #48 진단용 — UID/도메인 변수 격리) — 확인 끝나면 제거
+# >>> MINI-V Debug
 service htp_compute_svc /vendor/bin/htp_compute_test
     class hal
     user system
@@ -17,7 +17,7 @@ service htp_compute_svc /vendor/bin/htp_compute_test
     disabled
     oneshot
     stdio_to_kmsg
-# <<< MINI-V 임시 추가 끝
+# <<< MINI-V debug
 
 on property:vendor.miniv.ai.enabled=1
     mkdir /data/vendor/miniv_ai 0700 system system
