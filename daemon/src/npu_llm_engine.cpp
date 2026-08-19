@@ -48,7 +48,7 @@ NpuLLMEngine::~NpuLLMEngine() {
 bool NpuLLMEngine::load(const std::string &modelPath,
                          const std::string &backendLibDir, int nCtx,
                          int nThreads) {
-    setenv("DSP_LIBRARY_PATH", "/vendor/lib64/rfsa/adsp", 1);
+    setenv("DSP_LIBRARY_PATH", "/data/vendor/miniv_ai:/vendor/lib64/rfsa/adsp", 1);
 
     // >>> MINI-V 유지 (라이브러리 내부 fprintf(stderr,...) 로그 확보용)
     freopen("/data/vendor/miniv_ai/stderr.log", "a", stderr);
