@@ -13,5 +13,6 @@ cc_binary {
         "libggml-base-npu-prebuilt-linked",
         "libggml-htp-npu-prebuilt-linked",
         "libggml-cpu-npu-prebuilt-linked",
+        "libbinder_ndk",
     ],
 }

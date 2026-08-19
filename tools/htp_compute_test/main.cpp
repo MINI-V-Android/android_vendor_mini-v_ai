@@ -14,11 +14,14 @@
 #include "ggml-backend.h"
 #include "ggml-alloc.h"
 #include "ggml-htp.h"
+#include <android/binder_process.h>
 
 // IEEE754 half-precision 1.0
 static const uint16_t F16_ONE = 0x3C00;
 
 int main() {
+    ABinderProcess_startThreadPool();
+    printf("[0] ABinderProcess_startThreadPool() called\n");
     printf("[1] ggml_backend_htp_reg() ...\n");
     ggml_backend_reg_t reg = ggml_backend_htp_reg();
     if (!reg) { printf("[1] FAILED: reg is null\n"); return 1; }
