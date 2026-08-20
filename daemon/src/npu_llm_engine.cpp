@@ -44,7 +44,7 @@ bool NpuLLMEngine::load(const std::string &modelPath,
                          const std::string &backendLibDir, int nCtx,
                          int nThreads) {
     setenv("DSP_LIBRARY_PATH", "/data/vendor/miniv_ai:/vendor/lib64/rfsa/adsp", 1);
-
+    setenv("GGML_SCHED_DEBUG", "2", 1);
     // 라이브러리 내부 로그 찍기용 
     freopen("/data/vendor/miniv_ai/stderr.log", "a", stderr);
     setvbuf(stderr, nullptr, _IOLBF, 0);
