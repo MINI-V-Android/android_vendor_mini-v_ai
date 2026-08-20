@@ -4,8 +4,8 @@
 #include <android/log.h>
 #include <vector>
 
-// Custom file based MINI-V Logger: for Permanant logger
-// 결론(avc denial 전무, permissive에서도 logd 관련 시도 자체 없음 확인).
+// Custom file based MINI-V Logger: for Permanant logger  
+// avc denial 전무, permissive에서도 logd 관련 시도 자체 없음 확인.
 #include <cstdio>
 namespace miniv::ai {
 static void miniv_file_log(const char *level, const char *msg) {
@@ -45,13 +45,13 @@ bool NpuLLMEngine::load(const std::string &modelPath,
                          int nThreads) {
     setenv("DSP_LIBRARY_PATH", "/data/vendor/miniv_ai:/vendor/lib64/rfsa/adsp", 1);
 
-    // >>> MINI-V 유지 (라이브러리 내부 fprintf(stderr,...) 로그 확보용)
+    // 라이브러리 내부 로그 찍기용 
     freopen("/data/vendor/miniv_ai/stderr.log", "a", stderr);
     setvbuf(stderr, nullptr, _IOLBF, 0);
   
     llama_backend_init();
 
-    // HTP 백엔드를 스캔 -> dlopen
+    // HTP 백엔드 스캔 -> dlopen
     ggml_backend_load_all_from_path(backendLibDir.c_str());
     mBackendsLoaded = true;
 
@@ -93,7 +93,7 @@ bool NpuLLMEngine::load(const std::string &modelPath,
 
     auto sparams = llama_sampler_chain_default_params();
     mSampler = llama_sampler_chain_init(sparams);
-    // llama_sampler_chain_add(mSampler, llama_sampler_init_greedy());
+    // llama_sampler_chain_add(mSampler, llama_sampler_init_greedy()); // 그냥 greedy 디버깅용
     llama_sampler_chain_add(mSampler, llama_sampler_init_top_k(40));
     llama_sampler_chain_add(mSampler, llama_sampler_init_top_p(0.9f, 1));
     llama_sampler_chain_add(mSampler, llama_sampler_init_temp(0.7f));
@@ -142,11 +142,6 @@ bool NpuLLMEngine::infer(const std::string &prompt, int maxTokens,
     }
     LOGI("prompt token ids: %s", tokStr.c_str());
   }
-  // 이슈 #44 최종 — llama_batch_init 수동 구성을 버리고, 정상 동작이 검증된
-  // llama-cli와 동일하게 llama_batch_get_one 사용. 이 헬퍼는 pos/seq_id/logits를
-  // 전부 nullptr로 두고, llama_decode 내부가 자동으로 채움(pos는 KV 상태 기반,
-  // logits=nullptr이면 "마지막 토큰만" 경로 → n_outputs=1). 수동 구성이 이
-  // 자동 경로를 벗어나게 만든 것이 logits=0의 원인으로 판단.
   {
     llama_batch batch = llama_batch_get_one(promptTokens.data(), nPromptTokens);
       
@@ -157,7 +152,7 @@ bool NpuLLMEngine::infer(const std::string &prompt, int maxTokens,
   }
   llama_synchronize(mCtx);
 
-  // 진단: llama_get_logits_ith(-1) 사용 (n_outputs 검증까지 포함, llama-cli와 동일)
+  // llama_get_logits_ith(-1) 사용 
   {
     float *logits = llama_get_logits_ith(mCtx, -1);
     if (!logits) {
@@ -187,7 +182,7 @@ bool NpuLLMEngine::infer(const std::string &prompt, int maxTokens,
     int n = llama_token_to_piece(mModel, tok, buf, sizeof(buf), 0, true);
     onToken(std::string(buf, n));
 
-    // 다음 토큰도 동일하게 llama_batch_get_one 사용 (llama-cli와 동일)
+    // 다음 토큰도 동일하게 llama_batch_get_one 사용 
     {
       llama_batch batch = llama_batch_get_one(&tok, 1);
       if (batch.pos) batch.pos[0] = nPast;
