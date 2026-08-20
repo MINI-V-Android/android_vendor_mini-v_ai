@@ -84,6 +84,7 @@ bool NpuLLMEngine::load(const std::string &modelPath,
 
     cparams.n_batch = 2048;
     cparams.n_ubatch = 512;
+    cparams.embeddings = true;
 
     mCtx = llama_new_context_with_model(mModel, cparams);
     if (!mCtx) {
@@ -160,6 +161,15 @@ bool NpuLLMEngine::infer(const std::string &prompt, int maxTokens,
     } else {
       LOGI("logits[0..4] = %f %f %f %f %f", logits[0], logits[1], logits[2],
            logits[3], logits[4]);
+    }
+  }
+  {
+    float *embd = llama_get_embeddings_ith(mCtx, -1);
+    if (!embd) {
+      LOGE("llama_get_embeddings_ith(-1) returned NULL");
+    } else {
+      LOGI("result_norm[0..4] = %f %f %f %f %f", embd[0], embd[1], embd[2],
+           embd[3], embd[4]);
     }
   }
 
