@@ -1,0 +1,10 @@
+cc_binary {
+    name: "hal_test_cli",
+    defaults: ["miniv_ai_defaults"],
+    vendor: true,
+    srcs: ["main.cpp"],
+    shared_libs: [
+        "libbinder_ndk",
+        "vendor-miniv-ai-aidl-V1-ndk",
+    ],
+}
