@@ -3,6 +3,9 @@
 #include <chrono>
 #include <cstdio>
 
+#define LOG_TAG "SessionManager"
+#include "miniv_log.h"
+
 namespace miniv::ai {
 namespace {
 int64_t nowMs() {
@@ -18,8 +21,6 @@ SessionManager::SessionManager(llama_model *model,
     : mModel(model), mCtxParams(ctxParams), mSwapDir(std::move(swapDir)) {}
 
 SessionManager::~SessionManager() {
-  // HOT 세션들의 llama_context 해제. COLD 세션의 스왑 파일은 남겨둠
-  // (데몬 재시작 시 이어서 쓸 수 있게 — 필요 없으면 여기서 지워도 됨, 정책 미정)
   for (auto &kv : mSessions) {
     if (kv.second.state == SessionMeta::State::HOT && kv.second.ctx) {
       llama_free(kv.second.ctx);
@@ -42,13 +43,16 @@ std::string SessionManager::swapPathFor(int id) const {
 }
 
 bool SessionManager::createSession(int requestedId) {
-  if (mSessions.count(requestedId))
+  if (mSessions.count(requestedId)){
+    LOGI("createSession(%d) FAILED - already exists", requestedId);
     return false; // 중복 방지
+  }
   SessionMeta meta;
   meta.id = requestedId;
   meta.state = SessionMeta::State::COLD;
   meta.lastUsedMs = nowMs();
   mSessions.emplace(requestedId, std::move(meta));
+  LOGI("createSession(%d) OK, state=COLD, total sessions=%zu", requestedId, mSessions.size());
   return true;
 }
 
@@ -72,20 +76,26 @@ bool SessionManager::killSession(int id) {
 
 llama_context *SessionManager::activateForInfer(int id) {
   auto it = mSessions.find(id);
-  if (it == mSessions.end())
+  if (it == mSessions.end()){
+    LOGI("activateForInfer(%d) FAILED - not found", id);
     return nullptr;
+  }
   SessionMeta &meta = it->second;
 
   if (meta.state == SessionMeta::State::HOT) {
     touchHot(meta);
+    LOGI("activateForInfer(%d) HOT hit, tokens=%zu", id, meta.tokens.size());
     return meta.ctx;
   }
-
+  LOGI("activateForInfer(%d) COLD, swapping in from %s", id,
+       meta.swapFilePath.empty() ? "(No Session to Swap(NEW))" : meta.swapFilePath.c_str());
   evictHotIfNeeded(id);
 
   llama_context *ctx = llama_init_from_model(mModel, mCtxParams);
-  if (!ctx)
+  if (!ctx) {
+    LOGE("activateForInfer(%d) FAILED - llama_init_from_model returned null", id);
     return nullptr;
+  }
 
     if (!meta.swapFilePath.empty()) {
         meta.tokens.resize(mCtxParams.n_ctx);
@@ -94,10 +104,13 @@ llama_context *SessionManager::activateForInfer(int id) {
             ctx, meta.swapFilePath.c_str(), /*dest_seq_id=*/0,
             meta.tokens.data(), meta.tokens.size(), &nTokensOut);
         if (loaded == 0) {
+            LOGE("activateForInfer(%d) FAILED - swap file load failed: %s",
+                 id, meta.swapFilePath.c_str());
             llama_free(ctx);
             return nullptr;
         }
         meta.tokens.resize(nTokensOut);
+        LOGI("activateForInfer(%d) swap-in OK, restored %zu tokens", id, nTokensOut);
 
         mColdLru.erase(meta.lruIt);
         mColdUsedBytes -= meta.swapFileBytes;
@@ -142,6 +155,8 @@ void SessionManager::evictHotIfNeeded(int excludeId) {
     }
     if (victim == -1)
       break;
+    LOGI("evictHotIfNeeded: session=%d evicted (HOT limit=%zu exceeded, current=%zu)",
+         victim, mHotLimit, mHotLru.size());
     if (!swapOut(mSessions.at(victim)))
       break;
   }
@@ -151,6 +166,9 @@ void SessionManager::pruneOldestTokens(SessionMeta &meta,
                                        size_t nTokensToRemove) {
   if (nTokensToRemove == 0 || nTokensToRemove >= meta.tokens.size())
     return;
+
+  LOGI("pruneOldestTokens: session=%d removing %zu of %zu tokens (COLD limit exceeded)",
+       meta.id, nTokensToRemove, meta.tokens.size());
 
   llama_memory_t mem = llama_get_memory(meta.ctx);
   llama_memory_seq_rm(mem, /*seq_id=*/0, 0, (llama_pos)nTokensToRemove);
@@ -205,6 +223,8 @@ void SessionManager::evictColdIfNeeded(int excludeId) {
         break;
       victim = *std::next(mColdLru.begin());
     }
+    LOGI("evictColdIfNeeded: session=%d killed (COLD limit=%zu bytes exceeded, used=%zu)",
+         victim, mColdLimitBytes, mColdUsedBytes);
     killSession(victim);
   }
 }

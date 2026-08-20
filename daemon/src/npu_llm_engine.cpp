@@ -1,8 +1,10 @@
 #include "npu_llm_engine.h"
 #include "llama.h"
 
-#include <android/log.h>
 #include <vector>
+
+#define LOG_TAG "NpuLLMEngine"
+#include "miniv_log.h"
 
 // Custom file based MINI-V Logger: for Permanant logger  
 // avc denial 전무, permissive에서도 logd 관련 시도 자체 없음 확인.

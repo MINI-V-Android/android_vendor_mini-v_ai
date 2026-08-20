@@ -1,11 +1,9 @@
 #include "llm_engine.h"
 #include "llama.h"
-#include <android/log.h>
 #include <vector>
 
 #define LOG_TAG "LLMEngine"
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+#include "miniv_log.h"
 
 namespace miniv::ai {
 
@@ -67,6 +65,7 @@ bool LLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens,
                       TokenCallback onToken, std::atomic<bool> *cancelFlag) {
   llama_context *ctx = mSessionManager->activateForInfer(sessionId);
   if (!ctx)
+    LOGE("infer() session=%d activateForInfer FAILED (session not found?)", sessionId);
     return false; // main.cpp가 ERROR SESSION_NOT_FOUND로 응답
 
   const llama_vocab *vocab = llama_model_get_vocab(mModel);
@@ -78,9 +77,13 @@ bool LLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens,
   llama_tokenize(vocab, prompt.c_str(), prompt.size(), promptTokens.data(),
                  nPromptTokens, true, true);
 
+  LOGI("infer() session=%d maxTokens=%d nPromptTokens=%d",
+      sessionId, maxTokens, nPromptTokens);
+
   llama_batch batch =
       llama_batch_get_one(promptTokens.data(), promptTokens.size());
   if (llama_decode(ctx, batch) != 0)
+    LOGE("infer() session=%d prefill llama_decode FAILED", sessionId);
     return false;
   mSessionManager->recordTokens(sessionId, promptTokens.data(),
                                 promptTokens.size());
@@ -90,24 +93,30 @@ bool LLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens,
   generated.reserve(maxTokens);
 
   for (int i = 0; i < maxTokens; ++i) {
-    if (cancelFlag && cancelFlag->load()) break;  // Cancel 여부 확인
-
+    if (cancelFlag && cancelFlag->load()) 
+    {
+      LOGI("infer() session=%d cancelled at i=%d", sessionId, i);
+      break;  // Cancel 여부 확인
+    }
     llama_token tok = llama_sampler_sample(mSampler, ctx, -1);
     llama_sampler_accept(mSampler, tok);
 
-    if (llama_vocab_is_eog(vocab, tok))
+    if (llama_vocab_is_eog(vocab, tok)){
+      LOGI("infer() session=%d EOG at i=%d tok=%d", sessionId, i, tok);
       break;
-
+    }
     char buf[256];
     int n = llama_token_to_piece(vocab, tok, buf, sizeof(buf), 0, true);
     onToken(std::string(buf, n));
 
     generated.push_back(tok);
     llama_batch nextBatch = llama_batch_get_one(&tok, 1);
-    if (llama_decode(ctx, nextBatch) != 0)
+    if (llama_decode(ctx, nextBatch) != 0) {
+      LOGE("infer() session=%d decode loop FAILED at i=%d", sessionId, i);
       break;
+    }
   }
-
+  LOGI("infer() session=%d done, generated=%zu tokens", sessionId, generated.size());
   mSessionManager->recordTokens(sessionId, generated.data(), generated.size());
   return true;
 }
