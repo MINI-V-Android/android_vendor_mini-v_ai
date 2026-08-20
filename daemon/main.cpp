@@ -184,7 +184,8 @@ int main(int argc, char **argv) {
   //   LOG(ERROR) << "CPU model load failed, but continuing for NPU/UDS debug";
   //   return 1;
   // }
-  bool skipCpuEngineForTest = false;
+  // bool skipCpuEngineForTest = false;
+  bool skipCpuEngineForTest = getenv("SKIP_CPU_ENGINE") != nullptr;
   if (!skipCpuEngineForTest && !gEngine.load("/data/local/tmp/model.gguf", /*nCtx=*/2048, /*nThreads=*/4)) {
     LOG(ERROR) << "CPU model load failed";
     return 1;
