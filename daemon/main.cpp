@@ -61,6 +61,13 @@ void HandleClient(int clientFd) {
 
     if (cmd.rfind("CREATE_SESSION ", 0) == 0) {
       int id = atoi(cmd.c_str() + 15);
+
+      if (!gEngine.isReady()) {
+        fprintf(wf, "ERROR engine not ready\n");
+        fflush(wf);
+        continue;
+      }
+
       bool ok = gEngine.sessionManager()->createSession(id);
       fprintf(wf, ok ? "OK\n" : "ERROR ALREADY_EXISTS\n");
       fflush(wf);
@@ -177,14 +184,12 @@ int main(int argc, char **argv) {
   //   LOG(ERROR) << "CPU model load failed, but continuing for NPU/UDS debug";
   //   return 1;
   // }
-  bool skipCpuEngineForTest = true;
+  bool skipCpuEngineForTest = false;
   if (!skipCpuEngineForTest && !gEngine.load("/data/local/tmp/model.gguf", /*nCtx=*/2048, /*nThreads=*/4)) {
     LOG(ERROR) << "CPU model load failed";
     return 1;
   }
-  // ── HAL 등록 (신규, §11-c) ──────────────────────────────────
-  // UDS accept 루프는 계속 메인 스레드 blocking으로 돌고, HAL은
-  // libbinder의 별도 스레드풀에서 처리되므로 서로 간섭하지 않음.
+  // HAL 등록 
   ABinderProcess_setThreadPoolMaxThreadCount(4);
 
   auto halService =

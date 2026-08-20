@@ -30,6 +30,10 @@ ndk::ScopedAStatus MiniVAiHalService::createSession(int32_t sessionId, int32_t* 
 }
 
 ndk::ScopedAStatus MiniVAiHalService::destroySession(int32_t sessionId, int32_t* _aidl_return) {
+  if (!mEngine->isReady()) {
+    *_aidl_return = IMiniVAiHal::DESTROY_SESSION_ERR_NOT_FOUND;
+    return ndk::ScopedAStatus::ok();
+  }
   bool ok = mEngine->sessionManager()->killSession(sessionId);
   *_aidl_return = ok ? 0 : IMiniVAiHal::DESTROY_SESSION_ERR_NOT_FOUND;
   return ndk::ScopedAStatus::ok();
