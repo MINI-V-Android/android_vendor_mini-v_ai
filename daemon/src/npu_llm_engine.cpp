@@ -1,12 +1,27 @@
 #include "npu_llm_engine.h"
 #include "llama.h"
 
+#include <cstring>
 #include <vector>
 
 #define LOG_TAG "NpuLLMEngine"
 #include "miniv_log.h"
 
 namespace miniv::ai {
+
+static bool MiniVEvalCallback(struct ggml_tensor* t, bool ask, void* /*user_data*/) {
+  if (strcmp(t->name, "result_norm") != 0) {
+    return false;  // 이 텐서만 관심 있음, 나머진 최적화되게 그냥 둠
+  }
+  if (ask) {
+    return true;  // "result_norm은 계산 후에도 버리지 말고 남겨둬라"
+  }
+  // ask == false: 계산 완료, 이제 값 읽기 가능
+  float vals[4] = {0};
+  ggml_backend_tensor_get(t, vals, 0, sizeof(vals));
+  LOGI("cb_eval result_norm[0..3] = %f %f %f %f", vals[0], vals[1], vals[2], vals[3]);
+  return true;
+}
 
 NpuLLMEngine::~NpuLLMEngine() {
     if (mSampler) llama_sampler_free(mSampler);
@@ -59,6 +74,8 @@ bool NpuLLMEngine::load(const std::string &modelPath,
 
     cparams.n_batch = 2048;
     cparams.n_ubatch = 512;
+    cparams.cb_eval = MiniVEvalCallback;
+    cparams.cb_eval_user_data = nullptr;
 
     mCtx = llama_new_context_with_model(mModel, cparams);
     if (!mCtx) {
