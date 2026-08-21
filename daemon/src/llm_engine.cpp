@@ -64,10 +64,10 @@ std::string LLMEngine::getModelInfo() const {
 bool LLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens,
                       TokenCallback onToken, std::atomic<bool> *cancelFlag) {
   llama_context *ctx = mSessionManager->activateForInfer(sessionId);
-  if (!ctx)
+  if (!ctx){
     LOGE("infer() session=%d activateForInfer FAILED (session not found?)", sessionId);
     return false; // main.cpp가 ERROR SESSION_NOT_FOUND로 응답
-
+  }
   const llama_vocab *vocab = llama_model_get_vocab(mModel);
 
   // --- prefill ---
@@ -82,9 +82,10 @@ bool LLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens,
 
   llama_batch batch =
       llama_batch_get_one(promptTokens.data(), promptTokens.size());
-  if (llama_decode(ctx, batch) != 0)
+  if (llama_decode(ctx, batch) != 0){
     LOGE("infer() session=%d prefill llama_decode FAILED", sessionId);
     return false;
+  }
   mSessionManager->recordTokens(sessionId, promptTokens.data(),
                                 promptTokens.size());
 
