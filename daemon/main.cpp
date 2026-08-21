@@ -173,22 +173,25 @@ int main(int argc, char **argv) {
   mkdir("/data/vendor/miniv_ai", 0700);
   mkdir("/data/vendor/miniv_ai/sessions", 0700);
 
-  // if (!gEngine.load("/data/local/tmp/model.gguf", 2048, 4)) {
-  //   LOG(ERROR) << "CPU model load failed, but continuing for NPU/UDS debug";
+
+  if (!gNpuEngine.load("/data/local/tmp/llama.cpp/qwen2.5-1.5b.iq4_nl+q8_0-hmx.gguf",
+                        "/vendor/lib64/miniv-npu", /*nCtx=*/2048, /*nThreads=*/4)) {
+    LOG(ERROR) << "NPU model load failed — HAL will report isReady()=false";
+    // 계속 진행: HAL/UDS 둘 다 살려서 원격 디버깅 가능하게 함
+  }
+
+  // bool skipCpuEngineForTest = true;
+  // if (!skipCpuEngineForTest && !gEngine.load("/data/local/tmp/model.gguf", /*nCtx=*/2048, /*nThreads=*/4)) {
+  //   LOG(ERROR) << "CPU model load failed";
   //   return 1;
   // }
-  bool skipCpuEngineForTest = true;
-  if (!skipCpuEngineForTest && !gEngine.load("/data/local/tmp/model.gguf", /*nCtx=*/2048, /*nThreads=*/4)) {
-    LOG(ERROR) << "CPU model load failed";
-    return 1;
-  }
   // ── HAL 등록 (신규, §11-c) ──────────────────────────────────
   // UDS accept 루프는 계속 메인 스레드 blocking으로 돌고, HAL은
   // libbinder의 별도 스레드풀에서 처리되므로 서로 간섭하지 않음.
   ABinderProcess_setThreadPoolMaxThreadCount(4);
 
   auto halService =
-      ndk::SharedRefBase::make<miniv::ai::MiniVAiHalService>(&gEngine);
+      ndk::SharedRefBase::make<miniv::ai::MiniVAiHalService>(&gNpuEngine);
   const std::string halInstance =
       std::string(miniv::ai::MiniVAiHalService::descriptor) + "/default";
 

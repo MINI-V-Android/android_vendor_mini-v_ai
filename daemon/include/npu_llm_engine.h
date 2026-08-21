@@ -1,38 +1,25 @@
 #pragma once
-#include <functional>
-#include <string>
-
-struct llama_model;
-struct llama_context;
-struct llama_sampler;
-
+#include <aidl/vendor/miniv/ai/BnMiniVAiHal.h>
+#include "npu_llm_engine.h"
 
 namespace miniv::ai {
 
-class NpuLLMEngine {
+class MiniVAiHalService : public aidl::vendor::miniv::ai::BnMiniVAiHal {
 public:
-  using TokenCallback = std::function<void(const std::string &tokenText)>;
+  explicit MiniVAiHalService(NpuLLMEngine* engine) : mEngine(engine) {}
 
-  ~NpuLLMEngine();
-
-  // backendLibDir: libggml-htp.so 등이 위치한 디렉토리
-  //  model load
-  bool load(const std::string &modelPath, const std::string &backendLibDir,
-            int nCtx, int nThreads);
-
-  bool isReady() const { return mModel != nullptr; }
-
-  // 세션ID/cancelFlag 없음 TODO : 세션 이어지는 경우를 추가하기
-  bool infer(const std::string &prompt, int maxTokens, TokenCallback onToken);
-
-  std::string getModelInfo() const;
+  ndk::ScopedAStatus isReady(bool* _aidl_return) override;
+  ndk::ScopedAStatus createSession(int32_t sessionId, int32_t* _aidl_return) override;
+  ndk::ScopedAStatus destroySession(int32_t sessionId, int32_t* _aidl_return) override;
+  ndk::ScopedAStatus inferStream(
+      int32_t sessionId, const std::string& prompt, int32_t maxTokens,
+      const std::shared_ptr<aidl::vendor::miniv::ai::IMiniVAiStreamCallback>& callback,
+      int32_t* _aidl_return) override;
+  ndk::ScopedAStatus cancel(int32_t sessionId) override;
+  ndk::ScopedAStatus getModelInfo(std::string* _aidl_return) override;
 
 private:
-  llama_model *mModel = nullptr;
-  llama_context *mCtx = nullptr;
-  llama_sampler *mSampler = nullptr;
-  std::string mModelPath;
-  bool mBackendsLoaded = false;
+  NpuLLMEngine* mEngine;
 };
 
 }  // namespace miniv::ai
