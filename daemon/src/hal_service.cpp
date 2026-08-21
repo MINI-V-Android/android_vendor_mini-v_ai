@@ -1,8 +1,8 @@
 #include "hal_service.h"
-#include <atomic>
+#include <android-base/logging.h>
 #include <thread>
-#include <unordered_map>
 #include <mutex>
+#include <set>
 
 namespace miniv::ai {
 
@@ -10,8 +10,16 @@ using aidl::vendor::miniv::ai::IMiniVAiHal;
 using aidl::vendor::miniv::ai::IMiniVAiStreamCallback;
 
 namespace {
-std::mutex gCancelMapMutex;
-std::unordered_map<int, std::shared_ptr<std::atomic<bool>>> gCancelFlags;
+// >>> MINI-V 추가 [MOD-06] (NpuLLMEngine은 세션 개념이 없는 단일 전역 엔진이라,
+//     HAL 계약(세션ID 존재/중복 검증)을 지키기 위한 추적을 이 레이어에서만 함.
+//     실제 추론은 sessionId와 무관하게 항상 같은 gNpuEngine을 씀.)
+std::mutex gSessionMutex;
+std::set<int32_t> gActiveSessions;
+
+// NpuLLMEngine::infer()가 스레드 세이프하지 않음(mCtx 공유) — HAL 스레드풀에서
+// 동시 호출이 들어와도 여기서 직렬화해 안전하게 만듦. 성능보다 정합성 우선.
+std::mutex gNpuInferMutex;
+// <<< MINI-V 추가 끝 [MOD-06]
 }  // namespace
 
 ndk::ScopedAStatus MiniVAiHalService::isReady(bool* _aidl_return) {
@@ -24,14 +32,16 @@ ndk::ScopedAStatus MiniVAiHalService::createSession(int32_t sessionId, int32_t* 
     *_aidl_return = IMiniVAiHal::CREATE_SESSION_ERR_ENGINE_NOT_READY;
     return ndk::ScopedAStatus::ok();
   }
-  bool ok = mEngine->sessionManager()->createSession(sessionId);
-  *_aidl_return = ok ? 0 : IMiniVAiHal::CREATE_SESSION_ERR_ALREADY_EXISTS;
+  std::lock_guard<std::mutex> lock(gSessionMutex);
+  auto [it, inserted] = gActiveSessions.insert(sessionId);
+  *_aidl_return = inserted ? 0 : IMiniVAiHal::CREATE_SESSION_ERR_ALREADY_EXISTS;
   return ndk::ScopedAStatus::ok();
 }
 
 ndk::ScopedAStatus MiniVAiHalService::destroySession(int32_t sessionId, int32_t* _aidl_return) {
-  bool ok = mEngine->sessionManager()->killSession(sessionId);
-  *_aidl_return = ok ? 0 : IMiniVAiHal::DESTROY_SESSION_ERR_NOT_FOUND;
+  std::lock_guard<std::mutex> lock(gSessionMutex);
+  size_t erased = gActiveSessions.erase(sessionId);
+  *_aidl_return = erased ? 0 : IMiniVAiHal::DESTROY_SESSION_ERR_NOT_FOUND;
   return ndk::ScopedAStatus::ok();
 }
 
@@ -44,29 +54,33 @@ ndk::ScopedAStatus MiniVAiHalService::inferStream(
     return ndk::ScopedAStatus::ok();
   }
 
-  auto cancelFlag = std::make_shared<std::atomic<bool>>(false);
   {
-    std::lock_guard<std::mutex> lock(gCancelMapMutex);
-    gCancelFlags[sessionId] = cancelFlag;
+    std::lock_guard<std::mutex> lock(gSessionMutex);
+    if (gActiveSessions.find(sessionId) == gActiveSessions.end()) {
+      *_aidl_return = 0;  // 접수는 됨 — 실패는 onError로 비동기 통보(프레임워크 관례)
+      std::thread([sessionId, callback]() {
+        callback->onError(sessionId, IMiniVAiStreamCallback::ERROR_SESSION_NOT_FOUND,
+                           "SESSION_NOT_FOUND");
+      }).detach();
+      return ndk::ScopedAStatus::ok();
+    }
   }
 
-  std::thread([this, sessionId, prompt, maxTokens, callback, cancelFlag]() {
-    bool ok = mEngine->infer(sessionId, prompt, maxTokens,
-        [&](const std::string& tok) { callback->onToken(sessionId, tok); },
-        cancelFlag.get());
-
+  std::thread([this, sessionId, prompt, maxTokens, callback]() {
+    bool ok;
     {
-      std::lock_guard<std::mutex> lock(gCancelMapMutex);
-      gCancelFlags.erase(sessionId);
+      // >>> MINI-V 추가 [MOD-06] (직렬화 — 위 gNpuInferMutex 설명 참고)
+      std::lock_guard<std::mutex> inferLock(gNpuInferMutex);
+      ok = mEngine->infer(prompt, maxTokens,
+          [&](const std::string& tok) { callback->onToken(sessionId, tok); });
+      // <<< MINI-V 추가 끝 [MOD-06]
     }
 
     if (ok) {
       callback->onComplete(sessionId);
     } else {
-      // 세션이 없어서 infer()가 실패한 경우. 프레임워크 쪽 관례(unknown
-      // session도 SESSION_EVICTED로 보고)를 그대로 따라 이 코드를 씀.
-      callback->onError(sessionId, IMiniVAiStreamCallback::ERROR_SESSION_NOT_FOUND,
-                         "SESSION_NOT_FOUND");
+      callback->onError(sessionId, IMiniVAiStreamCallback::ERROR_GENERIC_FAILURE,
+                         "NPU_INFER_FAILED");
     }
   }).detach();
 
@@ -75,11 +89,14 @@ ndk::ScopedAStatus MiniVAiHalService::inferStream(
 }
 
 ndk::ScopedAStatus MiniVAiHalService::cancel(int32_t sessionId) {
-  std::lock_guard<std::mutex> lock(gCancelMapMutex);
-  auto it = gCancelFlags.find(sessionId);
-  if (it != gCancelFlags.end()) {
-    it->second->store(true);
-  }
+  // >>> MINI-V 추가 [MOD-06] (알려진 한계) NpuLLMEngine::infer()는 취소
+  // 체크 지점이 없어 현재는 진짜로 취소가 안 됨. 조용히 무시하는 대신
+  // 로그로 남겨서, 프레임워크 쪽이 "취소했는데 응답이 계속 온다"를
+  // 디버깅할 때 이 로그로 원인을 바로 알 수 있게 함. 향후 개선 여지는
+  // 아래 §안내 참고.
+  LOG(WARNING) << "cancel(" << sessionId << ") requested but NpuLLMEngine "
+               << "has no cancellation support yet — ignored";
+  // <<< MINI-V 추가 끝 [MOD-06]
   return ndk::ScopedAStatus::ok();
 }
 
