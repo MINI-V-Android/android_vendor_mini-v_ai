@@ -1,12 +1,12 @@
 #pragma once
 #include <aidl/vendor/miniv/ai/BnMiniVAiHal.h>
-#include "llm_engine.h"
+#include "npu_llm_engine.h"
 
 namespace miniv::ai {
 
 class MiniVAiHalService : public aidl::vendor::miniv::ai::BnMiniVAiHal {
 public:
-  explicit MiniVAiHalService(LLMEngine* engine) : mEngine(engine) {}
+  explicit MiniVAiHalService(NpuLLMEngine* engine) : mEngine(engine) {}
 
   ndk::ScopedAStatus isReady(bool* _aidl_return) override;
   ndk::ScopedAStatus createSession(int32_t sessionId, int32_t* _aidl_return) override;
@@ -19,7 +19,7 @@ public:
   ndk::ScopedAStatus getModelInfo(std::string* _aidl_return) override;
 
 private:
-  LLMEngine* mEngine;
+  NpuLLMEngine* mEngine;
 };
 
 }  // namespace miniv::ai
