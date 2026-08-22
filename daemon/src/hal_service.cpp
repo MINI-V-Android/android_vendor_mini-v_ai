@@ -1,4 +1,6 @@
 #include "hal_service.h"
+#include <android-base/logging.h>
+#include <thread>
 #include <mutex>
 #include <set>
 
