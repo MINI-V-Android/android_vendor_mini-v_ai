@@ -185,6 +185,10 @@ int main(int argc, char **argv) {
   //   LOG(ERROR) << "CPU model load failed";
   //   return 1;
   // }
+
+  LOG(INFO) << "CPU engine intentionally not loaded (NPU-only branch)";
+
+
   // ── HAL 등록 (신규, §11-c) ──────────────────────────────────
   // UDS accept 루프는 계속 메인 스레드 blocking으로 돌고, HAL은
   // libbinder의 별도 스레드풀에서 처리되므로 서로 간섭하지 않음.
