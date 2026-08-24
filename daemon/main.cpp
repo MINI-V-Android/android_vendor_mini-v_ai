@@ -174,11 +174,11 @@ int main(int argc, char **argv) {
   mkdir("/data/vendor/miniv_ai/sessions", 0700);
 
 
-  if (!gNpuEngine.load("/data/local/tmp/llama.cpp/qwen2.5-1.5b.iq4_nl+q8_0-hmx.gguf",
-                        "/vendor/lib64/miniv-npu", /*nCtx=*/2048, /*nThreads=*/4)) {
-    LOG(ERROR) << "NPU model load failed — HAL will report isReady()=false";
-    // 계속 진행: HAL/UDS 둘 다 살려서 원격 디버깅 가능하게 함
-  }
+  // if (!gNpuEngine.load("/data/local/tmp/llama.cpp/qwen2.5-1.5b.iq4_nl+q8_0-hmx.gguf",
+  //                       "/vendor/lib64/miniv-npu", /*nCtx=*/2048, /*nThreads=*/4)) {
+  //   LOG(ERROR) << "NPU model load failed — HAL will report isReady()=false";
+  // }
+  LOG(INFO) << "NPU auto-load disabled for diagnosis — use UDS npu_load manually";
 
   // bool skipCpuEngineForTest = true;
   // if (!skipCpuEngineForTest && !gEngine.load("/data/local/tmp/model.gguf", /*nCtx=*/2048, /*nThreads=*/4)) {
