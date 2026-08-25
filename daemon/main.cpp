@@ -14,7 +14,7 @@
 #include <cutils/sockets.h>
 
 #include "base64_util.h"
-#include "llm_engine.h"
+// #include "llm_engine.h"
 #include "npu_llm_engine.h"
 #include "hal_service.h"
 
@@ -29,7 +29,7 @@ constexpr const char *kSocketName = "miniv_ai";
 constexpr int kBacklog = 4;
 
 std::atomic<bool> g_running{true};
-miniv::ai::LLMEngine gEngine;
+// miniv::ai::LLMEngine gEngine;
 miniv::ai::NpuLLMEngine gNpuEngine;
 
 void SignalHandler(int signum) {
@@ -59,61 +59,61 @@ void HandleClient(int clientFd) {
   while (fgets(line, sizeof(line), rf)) {
     std::string cmd(line);
 
-    if (cmd.rfind("CREATE_SESSION ", 0) == 0) {
-      int id = atoi(cmd.c_str() + 15);
-      bool ok = gEngine.sessionManager()->createSession(id);
-      fprintf(wf, ok ? "OK\n" : "ERROR ALREADY_EXISTS\n");
-      fflush(wf);
+    // if (cmd.rfind("CREATE_SESSION ", 0) == 0) {
+    //   int id = atoi(cmd.c_str() + 15);
+    //   bool ok = gEngine.sessionManager()->createSession(id);
+    //   fprintf(wf, ok ? "OK\n" : "ERROR ALREADY_EXISTS\n");
+    //   fflush(wf);
 
-    } else if (cmd.rfind("KILL_SESSION ", 0) == 0) {
-      int id = atoi(cmd.c_str() + 13);
-      bool ok = gEngine.sessionManager()->killSession(id);
-      fprintf(wf, ok ? "OK\n" : "ERROR NOT_FOUND\n");
-      fflush(wf);
+    // } else if (cmd.rfind("KILL_SESSION ", 0) == 0) {
+    //   int id = atoi(cmd.c_str() + 13);
+    //   bool ok = gEngine.sessionManager()->killSession(id);
+    //   fprintf(wf, ok ? "OK\n" : "ERROR NOT_FOUND\n");
+    //   fflush(wf);
 
-    } else if (cmd.rfind("SET_HOT_LIMIT ", 0) == 0) {
-      size_t count =
-          static_cast<size_t>(strtoul(cmd.c_str() + 14, nullptr, 10));
-      gEngine.sessionManager()->setHotLimit(count);
-      fprintf(wf, "OK\n");
-      fflush(wf);
+    // } else if (cmd.rfind("SET_HOT_LIMIT ", 0) == 0) {
+    //   size_t count =
+    //       static_cast<size_t>(strtoul(cmd.c_str() + 14, nullptr, 10));
+    //   gEngine.sessionManager()->setHotLimit(count);
+    //   fprintf(wf, "OK\n");
+    //   fflush(wf);
 
-    } else if (cmd.rfind("SET_COLD_LIMIT ", 0) == 0) {
-      size_t bytes =
-          static_cast<size_t>(strtoull(cmd.c_str() + 15, nullptr, 10));
-      gEngine.sessionManager()->setColdLimit(bytes);
-      fprintf(wf, "OK\n");
-      fflush(wf);
+    // } else if (cmd.rfind("SET_COLD_LIMIT ", 0) == 0) {
+    //   size_t bytes =
+    //       static_cast<size_t>(strtoull(cmd.c_str() + 15, nullptr, 10));
+    //   gEngine.sessionManager()->setColdLimit(bytes);
+    //   fprintf(wf, "OK\n");
+    //   fflush(wf);
 
-    } else if (cmd.rfind("INFER ", 0) == 0) {
-      int sessionId = 0, maxTokens = 0;
-      sscanf(cmd.c_str() + 6, "%d %d", &sessionId, &maxTokens);
+    // } else if (cmd.rfind("INFER ", 0) == 0) {
+    //   int sessionId = 0, maxTokens = 0;
+    //   sscanf(cmd.c_str() + 6, "%d %d", &sessionId, &maxTokens);
 
-      std::string prompt;
-      char promptLine[4096];
-      while (fgets(promptLine, sizeof(promptLine), rf)) {
-        if (strncmp(promptLine, "END", 3) == 0)
-          break;
-        prompt += promptLine;
-      }
-      if (!prompt.empty() && prompt.back() == '\n')
-        prompt.pop_back();
+    //   std::string prompt;
+    //   char promptLine[4096];
+    //   while (fgets(promptLine, sizeof(promptLine), rf)) {
+    //     if (strncmp(promptLine, "END", 3) == 0)
+    //       break;
+    //     prompt += promptLine;
+    //   }
+    //   if (!prompt.empty() && prompt.back() == '\n')
+    //     prompt.pop_back();
 
-      if (!gEngine.isReady()) {
-        fprintf(wf, "ERROR engine not ready\n");
-        fflush(wf);
-        continue;
-      }
-      bool ok = gEngine.infer(
-          sessionId, prompt, maxTokens, [wf](const std::string &tok) {
-            fprintf(wf, "TOKEN %s\n", base64Encode(tok).c_str());
-            fflush(wf);
-          });
+    //   if (!gEngine.isReady()) {
+    //     fprintf(wf, "ERROR engine not ready\n");
+    //     fflush(wf);
+    //     continue;
+    //   }
+    //   bool ok = gEngine.infer(
+    //       sessionId, prompt, maxTokens, [wf](const std::string &tok) {
+    //         fprintf(wf, "TOKEN %s\n", base64Encode(tok).c_str());
+    //         fflush(wf);
+    //       });
 
-      fprintf(wf, ok ? "DONE\n" : "ERROR SESSION_NOT_FOUND\n");
-      fflush(wf);
-
-    } else if (cmd.rfind("NPU_LOAD ", 0) == 0) {
+    //   fprintf(wf, ok ? "DONE\n" : "ERROR SESSION_NOT_FOUND\n");
+    //   fflush(wf);
+    // } 
+      if (cmd.rfind("NPU_LOAD ", 0) == 0) {
       // NPU_LOAD <modelPath> <backendDir> <nCtx> <nThreads>
       char modelPath[512] = {0};
       char backendDir[512] = {0};
