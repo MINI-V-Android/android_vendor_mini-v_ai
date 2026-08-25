@@ -20,8 +20,9 @@ cc_binary {
     defaults: ["miniv_ai_defaults"],
     srcs: [
         "main.cpp",
-        "src/llm_engine.cpp",
-        "src/session_manager.cpp",
+        // CPU Engines
+        // "src/llm_engine.cpp",
+        // "src/session_manager.cpp",
         "src/hal_service.cpp",
     ],
     local_include_dirs: ["include"],
