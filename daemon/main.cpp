@@ -169,16 +169,15 @@ int main(int argc, char **argv) {
   android::base::InitLogging(argv, &android::base::KernelLogger);
   LOG(INFO) << "ai_daemon starting";
 
-  // 세션 스왑 디렉토리 사전 생성 (SessionManager가 없다고 가정하고 씀)
   mkdir("/data/vendor/miniv_ai", 0700);
   mkdir("/data/vendor/miniv_ai/sessions", 0700);
 
 
-  // if (!gNpuEngine.load("/data/local/tmp/llama.cpp/qwen2.5-1.5b.iq4_nl+q8_0-hmx.gguf",
-  //                       "/vendor/lib64/miniv-npu", /*nCtx=*/2048, /*nThreads=*/4)) {
-  //   LOG(ERROR) << "NPU model load failed — HAL will report isReady()=false";
-  // }
-  LOG(INFO) << "NPU auto-load disabled for diagnosis — use UDS npu_load manually";
+  if (!gNpuEngine.load("/data/local/tmp/llama.cpp/qwen2.5-1.5b.iq4_nl+q8_0-hmx.gguf",
+                        "/vendor/lib64/miniv-npu", /*nCtx=*/2048, /*nThreads=*/4)) {
+    LOG(ERROR) << "NPU model load failed — HAL will report isReady()=false";
+  }
+  // LOG(INFO) << "NPU auto-load disabled for diagnosis — use UDS npu_load manually";
 
   // bool skipCpuEngineForTest = true;
   // if (!skipCpuEngineForTest && !gEngine.load("/data/local/tmp/model.gguf", /*nCtx=*/2048, /*nThreads=*/4)) {
@@ -188,10 +187,6 @@ int main(int argc, char **argv) {
 
   LOG(INFO) << "CPU engine intentionally not loaded (NPU-only branch)";
 
-
-  // ── HAL 등록 (신규, §11-c) ──────────────────────────────────
-  // UDS accept 루프는 계속 메인 스레드 blocking으로 돌고, HAL은
-  // libbinder의 별도 스레드풀에서 처리되므로 서로 간섭하지 않음.
   ABinderProcess_setThreadPoolMaxThreadCount(4);
 
   auto halService =
@@ -202,10 +197,6 @@ int main(int argc, char **argv) {
   binder_status_t halStatus = AServiceManager_addService(
       halService->asBinder().get(), halInstance.c_str());
   if (halStatus != STATUS_OK) {
-    // §6-9(service_contexts 미등록) 때문에 지금은 실패가 예상되는 지점.
-    // permissive 상태라 addService 자체는 통과하고 denial 로그만 찍힐 수도
-    // 있고, enforcing 전환 후엔 진짜로 막힘. 어느 쪽이든 프로세스는 계속
-    // 살려서 UDS 디버깅 경로(ai_daemon_cli)는 항상 쓸 수 있게 둠.
     LOG(ERROR) << "AServiceManager_addService failed for " << halInstance
                << ": " << halStatus;
   } else {

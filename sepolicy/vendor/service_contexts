@@ -1,7 +1,2 @@
 # Reserved for future Binder service labels.
 # Currently empty: ai_daemon uses UDS, not Binder.
-#
-# 참고: vendor.miniv.ai.IMiniVAiHal/default의 service_contexts 등록은
-# 이 파일이 아니라 프레임워크 쪽(frameworks/mini-v/sepolicy/private/)에
-# 들어감 — AOSP AIDL HAL sepolicy 관례상 서비스 라벨 바인딩은 platform
-# 쪽에서 관리. 자세한 내용은 MINI-V_context.md §3-1 참고.

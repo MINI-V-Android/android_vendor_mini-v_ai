@@ -1,9 +1,15 @@
+on post-fs-data
+    mkdir /data/vendor/miniv_ai 0700 system system
+    mkdir /data/vendor/miniv_ai/sessions 0700 system system
+
+
 service miniv_ai /vendor/bin/ai_daemon
     class hal
     user system
     group system
+    interface aidl vendor.miniv.ai.IMiniVAiHal/default
     socket miniv_ai stream 0660 system system
-    disabled
+    ## disabled
     seclabel u:r:miniv_ai:s0
     ## FOR DEBUG
     stdio_to_kmsg
@@ -19,10 +25,10 @@ service htp_compute_svc /vendor/bin/htp_compute_test
     stdio_to_kmsg
 # <<< MINI-V debug
 
-on property:vendor.miniv.ai.enabled=1
-    mkdir /data/vendor/miniv_ai 0700 system system
-    mkdir /data/vendor/miniv_ai/sessions 0700 system system
-    start miniv_ai
+# on property:vendor.miniv.ai.enabled=1
+    # mkdir /data/vendor/miniv_ai 0700 system system
+    # mkdir /data/vendor/miniv_ai/sessions 0700 system system
+    # start miniv_ai
 
 on property:vendor.miniv.ai.enabled=0
     stop miniv_ai
