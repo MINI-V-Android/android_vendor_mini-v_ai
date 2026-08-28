@@ -1,8 +1,3 @@
-// HAL 단독 테스트 클라이언트 — service call로는 IMiniVAiStreamCallback
-// 같은 AIDL 콜백 인터페이스를 넘길 수 없어서, 콜백을 직접 구현해
-// AServiceManager_waitForService로 HAL을 잡고 실제 스트리밍을 눈으로
-// 확인하는 용도. 프레임워크 브릿지가 나중에 할 일을 미리 흉내낸 것.
-
 #define LOG_TAG "hal_test_cli"
 
 #include <aidl/vendor/miniv/ai/BnMiniVAiStreamCallback.h>
@@ -13,6 +8,8 @@
 
 #include <condition_variable>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <mutex>
 #include <string>
 
@@ -55,16 +52,24 @@ private:
   }
 };
 
+void printUsage() {
+  fprintf(stderr,
+          "usage:\n"
+          "  hal_test_cli is_ready\n"
+          "  hal_test_cli get_model_info\n"
+          "  hal_test_cli create_session <id>\n"
+          "  hal_test_cli infer <id> <prompt> [maxTokens]\n"
+          "  hal_test_cli destroy_session <id>\n");
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
-  if (argc < 3) {
-    fprintf(stderr, "usage: hal_test_cli <sessionId> <prompt> [maxTokens]\n");
+  if (argc < 2) {
+    printUsage();
     return 1;
   }
-  int32_t sessionId = atoi(argv[1]);
-  std::string prompt = argv[2];
-  int32_t maxTokens = argc > 3 ? atoi(argv[3]) : 64;
+  const std::string cmd = argv[1];
 
   const std::string instance =
       std::string(IMiniVAiHal::descriptor) + "/default";
@@ -84,42 +89,85 @@ int main(int argc, char** argv) {
   // 콜백(oneway)을 이 프로세스가 받으려면 binder 스레드풀이 떠 있어야 함.
   ABinderProcess_startThreadPool();
 
-  bool ready = false;
-  hal->isReady(&ready);
-  fprintf(stdout, "isReady() = %s\n", ready ? "true" : "false");
-  if (!ready) {
-    fprintf(stderr, "engine not ready — abort\n");
-    return 1;
+  if (cmd == "is_ready") {
+    bool ready = false;
+    hal->isReady(&ready);
+    fprintf(stdout, "isReady() = %s\n", ready ? "true" : "false");
+    return ready ? 0 : 1;
   }
 
-  int32_t rc = 0;
-  hal->createSession(sessionId, &rc);
-  fprintf(stdout, "createSession(%d) = %d\n", sessionId, rc);
-  if (rc != 0) {
-    fprintf(stderr, "createSession failed, code=%d\n", rc);
-    return 1;
+  if (cmd == "get_model_info") {
+    std::string info;
+    hal->getModelInfo(&info);
+    fprintf(stdout, "%s\n", info.c_str());
+    return 0;
   }
 
-  auto callback = ndk::SharedRefBase::make<TestCallback>();
-  rc = 0;
-  hal->inferStream(sessionId, prompt, maxTokens, callback, &rc);
-  fprintf(stdout, "inferStream() accepted = %d\n", rc);
-  if (rc != 0) {
-    fprintf(stderr, "inferStream failed, code=%d\n", rc);
-    return 1;
+  if (cmd == "create_session") {
+    if (argc < 3) {
+      printUsage();
+      return 1;
+    }
+    int32_t sessionId = atoi(argv[2]);
+    int32_t rc = 0;
+    hal->createSession(sessionId, &rc);
+    fprintf(stdout, "createSession(%d) = %d\n", sessionId, rc);
+    return rc == 0 ? 0 : 1;
   }
 
-  {
-    std::unique_lock<std::mutex> lock(gDoneMutex);
-    gDoneCv.wait_for(lock, std::chrono::seconds(60), [] { return gDone; });
-  }
-  if (!gDone) {
-    fprintf(stderr, "TIMEOUT waiting for onComplete/onError\n");
+  if (cmd == "destroy_session") {
+    if (argc < 3) {
+      printUsage();
+      return 1;
+    }
+    int32_t sessionId = atoi(argv[2]);
+    int32_t rc = 0;
+    hal->destroySession(sessionId, &rc);
+    fprintf(stdout, "destroySession(%d) = %d\n", sessionId, rc);
+    return rc == 0 ? 0 : 1;
   }
 
-  int32_t destroyRc = 0;
-  hal->destroySession(sessionId, &destroyRc);
-  fprintf(stdout, "destroySession(%d) = %d\n", sessionId, destroyRc);
+  if (cmd == "infer") {
+    if (argc < 4) {
+      printUsage();
+      return 1;
+    }
+    int32_t sessionId = atoi(argv[2]);
+    std::string prompt = argv[3];
+    int32_t maxTokens = argc > 4 ? atoi(argv[4]) : 64;
 
-  return gDone ? 0 : 1;
+    bool ready = false;
+    hal->isReady(&ready);
+    fprintf(stdout, "isReady() = %s\n", ready ? "true" : "false");
+    if (!ready) {
+      fprintf(stderr, "engine not ready — abort\n");
+      return 1;
+    }
+
+    auto callback = ndk::SharedRefBase::make<TestCallback>();
+    int32_t rc = 0;
+    hal->inferStream(sessionId, prompt, maxTokens, callback, &rc);
+    fprintf(stdout, "inferStream() accepted = %d\n", rc);
+    if (rc != 0) {
+      fprintf(stderr, "inferStream failed, code=%d\n", rc);
+      return 1;
+    }
+
+    {
+      std::unique_lock<std::mutex> lock(gDoneMutex);
+      gDoneCv.wait_for(lock, std::chrono::seconds(60), [] { return gDone; });
+    }
+    if (!gDone) {
+      fprintf(stderr, "TIMEOUT waiting for onComplete/onError\n");
+      return 1;
+    }
+    // ★ 이전 버전과 달리 여기서 destroySession을 자동으로 호출하지
+    // 않습니다 — 세션을 살려둬야 다음 infer 호출에서 핫 연속/콜드 복원을
+    // 테스트할 수 있습니다. 다 끝나면 destroy_session을 따로 불러주세요.
+    return 0;
+  }
+
+  fprintf(stderr, "unknown command: %s\n", cmd.c_str());
+  printUsage();
+  return 1;
 }

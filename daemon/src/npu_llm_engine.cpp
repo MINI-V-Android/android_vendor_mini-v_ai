@@ -176,19 +176,75 @@ std::string NpuLLMEngine::getModelInfo() const {
     return mModel ? mModelPath : "not loaded";
 }
 
-bool NpuLLMEngine::infer(const std::string &prompt, int maxTokens,
+bool NpuLLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens,
                           TokenCallback onToken) {
   if (!mCtx) return false;
 
-  LOGI("infer() called: maxTokens=%d, promptLen=%zu", maxTokens, prompt.size());
+  LOGI("infer() called: sessionId=%d maxTokens=%d promptLen=%zu", sessionId,
+       maxTokens, prompt.size());
 
-  llama_kv_cache_clear(mCtx);
+  bool sessionless = (sessionId < 0);  // UDS 단발 질의 — 세션 추적 자체를 안 함
 
-  int nPromptTokens = -llama_tokenize(mModel, prompt.c_str(), prompt.size(),
-                                       nullptr, 0, true, true);
+  SessionState *state = nullptr;
+  bool isBrandNewSession = false;
+  if (!sessionless) {
+    auto it = mSessions.find(sessionId);
+    isBrandNewSession = (it == mSessions.end());
+    if (isBrandNewSession) {
+      state = &mSessions.emplace(sessionId, SessionState{}).first->second;
+    } else {
+      state = &it->second;
+    }
+  }
+
+  bool freshStart = sessionless || (sessionId != mActiveSessionId);
+
+  if (freshStart) {
+    llama_kv_cache_clear(mCtx);
+    mCachePos = 0;
+    mActiveSessionId = sessionId;
+
+    if (!sessionless && !isBrandNewSession && !state->transcript.empty()) {
+      // 콜드 세션 복원 — 저장해둔 트랜스크립트를 조용히(토큰 생성 없이)
+      // 재생해서 KV 캐시를 그 세션이 마지막으로 있던 상태로 되돌립니다.
+      LOGI("reviving cold session %d — replaying %zu chars of history",
+           sessionId, state->transcript.size());
+      const std::string &hist = state->transcript;
+      int nHistTokens = -llama_tokenize(mModel, hist.c_str(), hist.size(),
+                                         nullptr, 0, true, true);
+      std::vector<llama_token> histTokens(nHistTokens);
+      llama_tokenize(mModel, hist.c_str(), hist.size(), histTokens.data(),
+                     nHistTokens, true, true);
+      llama_batch histBatch = llama_batch_get_one(histTokens.data(), nHistTokens);
+      if (llama_decode(mCtx, histBatch) != 0) {
+        LOGE("history replay decode failed for session %d", sessionId);
+        return false;
+      }
+      llama_synchronize(mCtx);
+      mCachePos += nHistTokens;
+      LOGI("history replay done — cachePos=%d", mCachePos);
+    } else {
+      LOGI("session %d starting fresh (no history to replay)", sessionId);
+    }
+  } else {
+    LOGI("session continued (sessionId=%d) — KV cache preserved, cachePos=%d",
+         sessionId, mCachePos);
+  }
+
+  // BOS 등 특수 토큰(add_special)은 "이 세션의 캐시가 지금 완전히 비어있는
+  // 상태에서 시작하는 첫 텍스트"일 때만 켭니다 — 세션 없는 단발 질의,
+  // 또는 세션의 진짜 첫 턴(트랜스크립트가 지금 이 호출 전까지 비어있던
+  // 경우)입니다. 콜드 복원은 재생 블록에서 이미 add_special=true로
+  // 처리했으므로, 그 뒤에 이어지는 이번 delta는 add_special=false여야
+  // 합니다.
+  bool addSpecial = sessionless || (!sessionless && isBrandNewSession &&
+                                     state->transcript.empty());
+  int nPromptTokens =
+      -llama_tokenize(mModel, prompt.c_str(), prompt.size(), nullptr, 0,
+                       addSpecial, true);
   std::vector<llama_token> promptTokens(nPromptTokens);
   llama_tokenize(mModel, prompt.c_str(), prompt.size(), promptTokens.data(),
-                 nPromptTokens, true, true);
+                 nPromptTokens, addSpecial, true);
 
   LOGI("tokenized: nPromptTokens=%d", nPromptTokens);
     {   
@@ -198,27 +254,9 @@ bool NpuLLMEngine::infer(const std::string &prompt, int maxTokens,
     }
     LOGI("prompt token ids: %s", tokStr.c_str());
   }
-  // 이슈 #44 최종 — llama_batch_init 수동 구성을 버리고, 정상 동작이 검증된
-  // llama-cli와 동일하게 llama_batch_get_one 사용. 이 헬퍼는 pos/seq_id/logits를
-  // 전부 nullptr로 두고, llama_decode 내부가 자동으로 채움(pos는 KV 상태 기반,
-  // logits=nullptr이면 "마지막 토큰만" 경로 → n_outputs=1). 수동 구성이 이
-  // 자동 경로를 벗어나게 만든 것이 logits=0의 원인으로 판단.
   {
     llama_batch batch = llama_batch_get_one(promptTokens.data(), nPromptTokens);
 
-    // FOR DEBUG
-    // - Checking for which .so is referenced
-    // Dl_info info;
-    // if (dladdr((void*)&llama_decode, &info) && info.dli_fname) {
-    //   LOGI("DIAG llama_decode resolved from: %s", info.dli_fname);
-    // }
-    // if (dladdr((void*)&llama_batch_get_one, &info) && info.dli_fname) {
-    //   LOGI("DIAG llama_batch_get_one resolved from: %s", info.dli_fname);
-    // }
-    // if (dladdr((void*)&llama_get_logits_ith, &info) && info.dli_fname) {
-    //   LOGI("DIAG llama_get_logits_ith resolved from: %s", info.dli_fname);
-    // }
-      
     if (llama_decode(mCtx, batch) != 0) {
       LOGE("prefill llama_decode failed");
       return false;
@@ -226,7 +264,6 @@ bool NpuLLMEngine::infer(const std::string &prompt, int maxTokens,
   }
   llama_synchronize(mCtx);
 
-  // 진단: llama_get_logits_ith(-1) 사용 (n_outputs 검증까지 포함, llama-cli와 동일)
   {
     float *logits = llama_get_logits_ith(mCtx, -1);
     if (!logits) {
@@ -237,7 +274,10 @@ bool NpuLLMEngine::infer(const std::string &prompt, int maxTokens,
     }
   }
 
-  int nPast = nPromptTokens;
+  mCachePos += nPromptTokens;
+  int nPast = mCachePos;  // ★ 이번 호출 로컬이 아니라 누적값에서 시작
+
+  std::string generatedText;  // 트랜스크립트 기록용 — 생성된 토큰을 모음
 
   for (int i = 0; i < maxTokens; ++i) {
     llama_token tok = llama_sampler_sample(mSampler, mCtx, -1);
@@ -254,9 +294,10 @@ bool NpuLLMEngine::infer(const std::string &prompt, int maxTokens,
 
     char buf[256];
     int n = llama_token_to_piece(mModel, tok, buf, sizeof(buf), 0, true);
-    onToken(std::string(buf, n));
+    std::string piece(buf, n);
+    onToken(piece);
+    generatedText += piece;
 
-    // 다음 토큰도 동일하게 llama_batch_get_one 사용 (llama-cli와 동일)
     {
       llama_batch batch = llama_batch_get_one(&tok, 1);
       if (batch.pos) batch.pos[0] = nPast;
@@ -269,8 +310,35 @@ bool NpuLLMEngine::infer(const std::string &prompt, int maxTokens,
     }
     llama_synchronize(mCtx);
     nPast++;
+    mCachePos++;  // ★ 누적 카운터도 같이 전진 — 다음 infer() 호출이 이어받음
   }
+
+  if (state != nullptr) {
+    // 이번 턴(입력 delta + 모델이 생성한 응답)을 트랜스크립트에 누적.
+    // 이 세션이 나중에 콜드가 됐다가 돌아오면 이 전체가 재생됩니다.
+    state->transcript += prompt;
+    state->transcript += generatedText;
+  }
+
   return true;
+}
+
+void NpuLLMEngine::destroySession(int sessionId) {
+  if (sessionId < 0) return;
+
+  auto it = mSessions.find(sessionId);
+  if (it == mSessions.end()) return;
+
+  if (sessionId == mActiveSessionId && mCtx) {
+    llama_kv_cache_clear(mCtx);
+    mCachePos = 0;
+    mActiveSessionId = -1;
+    LOGI("destroySession(%d): was hot — KV cache cleared", sessionId);
+  } else {
+    LOGI("destroySession(%d): was cold — transcript dropped", sessionId);
+  }
+
+  mSessions.erase(it);
 }
 
 }    // namespace miniv::ai

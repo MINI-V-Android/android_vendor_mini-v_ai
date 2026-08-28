@@ -146,7 +146,7 @@ void HandleClient(int clientFd) {
       }
 
       bool ok = gNpuEngine.infer(
-          prompt, maxTokens, [wf](const std::string &tok) {
+          /*sessionId=*/-1, prompt, maxTokens, [wf](const std::string &tok) {
             fprintf(wf, "TOKEN %s\n", base64Encode(tok).c_str());
             fflush(wf);
           });
