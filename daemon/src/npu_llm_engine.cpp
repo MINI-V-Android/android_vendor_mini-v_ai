@@ -269,9 +269,9 @@ bool NpuLLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens
   }
 
   mCachePos += nPromptTokens;
-  int nPast = mCachePos;  // ★ 이번 호출 로컬이 아니라 누적값에서 시작
+  int nPast = mCachePos;
 
-  std::string generatedText;  // 트랜스크립트 기록용 — 생성된 토큰을 모음
+  std::string generatedText;  // 트랜스크립트 기록용 — 생성된 토큰을 모음 last
 
   for (int i = 0; i < maxTokens; ++i) {
     llama_token tok = llama_sampler_sample(mSampler, mCtx, -1);
@@ -281,7 +281,7 @@ bool NpuLLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens
       LOGI("token[%d]: id=%d", i, tok);
     }
 
-    if (llama_token_is_eog(mModel, tok)) {
+    if (llama_token_is_eog(mModel, tok)) { // 종료 확인
       LOGI("EOG hit at i=%d, tok=%d", i, tok);
       break;
     }
