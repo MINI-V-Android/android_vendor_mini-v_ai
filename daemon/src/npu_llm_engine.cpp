@@ -320,8 +320,9 @@ bool NpuLLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens
   std::string text0, text1;
   std::vector<std::string> tokens0, tokens1;
   bool active0 = true, active1 = true;
-  int i_batch0 = 0;
-  int i_batch1 = 0;
+  // Prefill 배치의 마지막 토큰(logits=true) 인덱스로 초기화
+  int i_batch0 = nPromptTokens - 1;
+  int i_batch1 = nPromptTokens - 1;
   int curPos = nPast + nPromptTokens;
 
   for (int step = 0; step < maxTokens; ++step) {
