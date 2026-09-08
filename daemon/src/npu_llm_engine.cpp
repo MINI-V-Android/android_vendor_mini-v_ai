@@ -199,14 +199,14 @@ bool NpuLLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens
 
   bool freshStart = sessionless || (sessionId != mActiveSessionId);
 
+
+  // 초기화
   if (freshStart) {
     llama_kv_cache_clear(mCtx);
     mCachePos = 0;
     mActiveSessionId = sessionId;
 
     if (!sessionless && !isBrandNewSession && !state->transcript.empty()) {
-      // 콜드 세션 복원 — 저장해둔 트랜스크립트를 조용히(토큰 생성 없이)
-      // 재생해서 KV 캐시를 그 세션이 마지막으로 있던 상태로 되돌립니다.
       LOGI("reviving cold session %d — replaying %zu chars of history",
            sessionId, state->transcript.size());
       const std::string &hist = state->transcript;
@@ -231,12 +231,6 @@ bool NpuLLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens
          sessionId, mCachePos);
   }
 
-  // BOS 등 특수 토큰(add_special)은 "이 세션의 캐시가 지금 완전히 비어있는
-  // 상태에서 시작하는 첫 텍스트"일 때만 켭니다 — 세션 없는 단발 질의,
-  // 또는 세션의 진짜 첫 턴(트랜스크립트가 지금 이 호출 전까지 비어있던
-  // 경우)입니다. 콜드 복원은 재생 블록에서 이미 add_special=true로
-  // 처리했으므로, 그 뒤에 이어지는 이번 delta는 add_special=false여야
-  // 합니다.
   bool addSpecial = sessionless || (!sessionless && isBrandNewSession &&
                                      state->transcript.empty());
   int nPromptTokens =
