@@ -2,7 +2,10 @@ cc_library_shared {
     name: "libnpu-engine-miniv",
     defaults: ["miniv_ai_defaults"],
     vendor: true,
-    srcs: ["src/npu_llm_engine.cpp"],
+    srcs: [
+        "src/npu_llm_engine.cpp",
+        "src/rule_evaluator.cpp",
+    ],
     local_include_dirs: ["include"],
     include_dirs: ["vendor/mini-v/ai/prebuilts/npu/include"],
     shared_libs: [

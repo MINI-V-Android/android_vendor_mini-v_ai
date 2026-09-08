@@ -1,4 +1,5 @@
 #include "npu_llm_engine.h"
+#include "rule_evaluator.h"
 #include "llama.h"
 
 #include "ggml-htp.h"
@@ -8,9 +9,8 @@
 
 #include <android/log.h>
 #include <vector>
-
-// Custom file based MINI-V Logger: for Permanant logger
-// 결론(avc denial 전무, permissive에서도 logd 관련 시도 자체 없음 확인).
+#include <chrono>
+#include <thread>
 #include <cstdio>
 namespace miniv::ai {
 static void miniv_file_log(const char *level, const char *msg) {
@@ -176,12 +176,44 @@ std::string NpuLLMEngine::getModelInfo() const {
     return mModel ? mModelPath : "not loaded";
 }
 
+static void common_batch_clear(struct llama_batch & batch) {
+  batch.n_tokens = 0;
+}
+
+static void common_batch_add(
+    struct llama_batch & batch,
+    llama_token id,
+    llama_pos pos,
+    const std::vector<llama_seq_id> & seq_ids,
+    bool logits) {
+  batch.token   [batch.n_tokens] = id;
+  batch.pos     [batch.n_tokens] = pos;
+  batch.n_seq_id[batch.n_tokens] = seq_ids.size();
+  for (size_t i = 0; i < seq_ids.size(); ++i) {
+    batch.seq_id[batch.n_tokens][i] = seq_ids[i];
+  }
+  batch.logits  [batch.n_tokens] = logits;
+  batch.n_tokens++;
+}
+
+static std::string common_token_to_piece(const struct llama_model * model, llama_token tok) {
+  char buf[256];
+  int n = llama_token_to_piece(model, tok, buf, sizeof(buf), 0, true);
+  if (n < 0) {
+    std::vector<char> big_buf(-n);
+    int n2 = llama_token_to_piece(model, tok, big_buf.data(), big_buf.size(), 0, true);
+    return std::string(big_buf.data(), n2 > 0 ? n2 : 0);
+  }
+  return std::string(buf, n);
+}
+
+
 bool NpuLLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens,
                           TokenCallback onToken) {
   if (!mCtx) return false;
 
-  LOGI("infer() called: sessionId=%d maxTokens=%d promptLen=%zu", sessionId,
-       maxTokens, prompt.size());
+  LOGI("infer() called (N=2 Best-of-N mode): sessionId=%d maxTokens=%d promptLen=%zu",
+       sessionId, maxTokens, prompt.size());
 
   bool sessionless = (sessionId < 0);  // UDS 단발 질의 — 세션 추적 자체를 안 함
 
@@ -198,7 +230,6 @@ bool NpuLLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens
   }
 
   bool freshStart = sessionless || (sessionId != mActiveSessionId);
-
 
   // 초기화
   if (freshStart) {
@@ -241,78 +272,148 @@ bool NpuLLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens
                  nPromptTokens, addSpecial, true);
 
   LOGI("tokenized: nPromptTokens=%d", nPromptTokens);
-    {   
+  {   
     std::string tokStr;
     for (int i = 0; i < nPromptTokens; ++i) {
       tokStr += std::to_string(promptTokens[i]) + " ";
     }
     LOGI("prompt token ids: %s", tokStr.c_str());
   }
-  {
-    llama_batch batch = llama_batch_get_one(promptTokens.data(), nPromptTokens);
 
-    if (llama_decode(mCtx, batch) != 0) {
-      LOGE("prefill llama_decode failed");
-      return false;
-    }
+  int nPast = mCachePos;
+
+  // 배치 할당 (최대 프롬프트 크기 및 병렬 2 시퀀스 수용 가능하도록 초기화)
+  llama_batch batch = llama_batch_init(std::max(2048, nPromptTokens + 64), 0, 2);
+
+  // 1. 프롬프트 토큰화 및 Prefill 연산 (seq_id = 0)
+  common_batch_clear(batch);
+  for (int i = 0; i < nPromptTokens; ++i) {
+    bool is_last = (i == nPromptTokens - 1);
+    common_batch_add(batch, promptTokens[i], nPast + i, { 0 }, is_last);
+  }
+
+  if (llama_decode(mCtx, batch) != 0) {
+    LOGE("Prefill decode failed");
+    llama_batch_free(batch);
+    return false;
   }
   llama_synchronize(mCtx);
 
-  {
-    float *logits = llama_get_logits_ith(mCtx, -1);
-    if (!logits) {
-      LOGE("llama_get_logits_ith(-1) returned NULL");
-    } else {
-      LOGI("logits[0..4] = %f %f %f %f %f", logits[0], logits[1], logits[2],
-           logits[3], logits[4]);
-    }
-  }
+  // 2. KV 캐시 복제 (seq_id 0의 상태를 seq_id 1로 복사)
+  // 무거운 프롬프트 연산을 1번만 하고 상태를 공유합니다.
+  llama_kv_cache_seq_cp(mCtx, 0, 1, -1, -1);
 
-  mCachePos += nPromptTokens;
-  int nPast = mCachePos;
+  // 3. 샘플러 독립 구성 (다양성 확보 - 서로 다른 Seed 부여)
+  llama_sampler * sampler0 = llama_sampler_chain_init(llama_sampler_chain_default_params());
+  llama_sampler_chain_add(sampler0, llama_sampler_init_top_k(40));
+  llama_sampler_chain_add(sampler0, llama_sampler_init_top_p(0.9f, 1));
+  llama_sampler_chain_add(sampler0, llama_sampler_init_temp(0.7f));
+  llama_sampler_chain_add(sampler0, llama_sampler_init_dist(1234)); // Seed A
 
-  std::string generatedText;  // 트랜스크립트 기록용 — 생성된 토큰을 모음 last
+  llama_sampler * sampler1 = llama_sampler_chain_init(llama_sampler_chain_default_params());
+  llama_sampler_chain_add(sampler1, llama_sampler_init_top_k(40));
+  llama_sampler_chain_add(sampler1, llama_sampler_init_top_p(0.9f, 1));
+  llama_sampler_chain_add(sampler1, llama_sampler_init_temp(0.7f));
+  llama_sampler_chain_add(sampler1, llama_sampler_init_dist(5678)); // Seed B
 
-  for (int i = 0; i < maxTokens; ++i) {
-    llama_token tok = llama_sampler_sample(mSampler, mCtx, -1);
-    llama_sampler_accept(mSampler, tok);
+  // 4. 병렬 디코딩 루프 (Batch Decode - onToken 호출 없이 버퍼에 조용히 저장)
+  std::string text0, text1;
+  std::vector<std::string> tokens0, tokens1;
+  bool active0 = true, active1 = true;
+  int i_batch0 = 0;
+  int i_batch1 = 0;
+  int curPos = nPast + nPromptTokens;
 
-    if (i < 3) {
-      LOGI("token[%d]: id=%d", i, tok);
-    }
+  for (int step = 0; step < maxTokens; ++step) {
+    common_batch_clear(batch);
 
-    if (llama_token_is_eog(mModel, tok)) { // 종료 확인
-      LOGI("EOG hit at i=%d, tok=%d", i, tok);
-      break;
-    }
-
-    char buf[256];
-    int n = llama_token_to_piece(mModel, tok, buf, sizeof(buf), 0, true);
-    std::string piece(buf, n);
-    onToken(piece);
-    generatedText += piece;
-
-    {
-      llama_batch batch = llama_batch_get_one(&tok, 1);
-      if (batch.pos) batch.pos[0] = nPast;
-      if (batch.seq_id) batch.seq_id[0][0] = 0;
-      if (batch.logits) batch.logits[0] = 1;
-      if (llama_decode(mCtx, batch) != 0) {
-        LOGE("decode loop failed at i=%d", i);
-        break;
+    // seq 0 샘플링 및 배치 추가
+    if (active0) {
+      llama_token id0 = llama_sampler_sample(sampler0, mCtx, i_batch0);
+      if (llama_token_is_eog(mModel, id0)) {
+        active0 = false;
+        i_batch0 = -1;
+      } else {
+        std::string piece = common_token_to_piece(mModel, id0);
+        text0 += piece;
+        tokens0.push_back(piece);
+        i_batch0 = batch.n_tokens;
+        common_batch_add(batch, id0, curPos, { 0 }, true);
       }
     }
+
+    // seq 1 샘플링 및 배치 추가
+    if (active1) {
+      llama_token id1 = llama_sampler_sample(sampler1, mCtx, i_batch1);
+      if (llama_token_is_eog(mModel, id1)) {
+        active1 = false;
+        i_batch1 = -1;
+      } else {
+        std::string piece = common_token_to_piece(mModel, id1);
+        text1 += piece;
+        tokens1.push_back(piece);
+        i_batch1 = batch.n_tokens;
+        common_batch_add(batch, id1, curPos, { 1 }, true);
+      }
+    }
+
+    if (!active0 && !active1) break;
+    if (batch.n_tokens == 0) break;
+
+    // 최대 2개의 토큰을 NPU로 일괄 오프로드하여 추론
+    if (llama_decode(mCtx, batch) != 0) {
+      LOGE("decode loop failed at step %d", step);
+      break;
+    }
     llama_synchronize(mCtx);
-    nPast++;
-    mCachePos++;  // ★ 누적 카운터도 같이 전진 — 다음 infer() 호출이 이어받음
+
+    curPos++;
   }
 
-  if (state != nullptr) {
-    // 이번 턴(입력 delta + 모델이 생성한 응답)을 트랜스크립트에 누적.
-    // 이 세션이 나중에 콜드가 됐다가 돌아오면 이 전체가 재생됩니다.
-    state->transcript += prompt;
-    state->transcript += generatedText;
+  // 5. 호스트 CPU 기반 평가 (더미 랜덤 / 룰베이스)
+  int score0 = miniv::ai::evaluate_response(text0);
+  int score1 = miniv::ai::evaluate_response(text1);
+
+  LOGI("N=2 evaluation: seq0 score=%d len=%zu, seq1 score=%d len=%zu",
+       score0, text0.size(), score1, text1.size());
+
+  int bestSeq = (score1 > score0) ? 1 : 0;
+  const std::string &bestText = (bestSeq == 1) ? text1 : text0;
+  const std::vector<std::string> &bestTokens = (bestSeq == 1) ? tokens1 : tokens0;
+  int bestTokenCount = bestTokens.size();
+
+  LOGI("Best Response (Seq %d, score %d): %s",
+       bestSeq, (bestSeq == 1 ? score1 : score0), bestText.c_str());
+
+  // 승자 시퀀스의 KV 캐시 동기화 및 패자 시퀀스 제거
+  if (bestSeq == 0) {
+    llama_kv_cache_seq_rm(mCtx, 1, -1, -1);
+  } else {
+    llama_kv_cache_seq_rm(mCtx, 0, nPast + nPromptTokens, -1);
+    llama_kv_cache_seq_cp(mCtx, 1, 0, nPast + nPromptTokens, -1);
+    llama_kv_cache_seq_rm(mCtx, 1, -1, -1);
   }
+
+  mCachePos += nPromptTokens + bestTokenCount;
+
+  // 6. 승리한 시퀀스의 토큰만 앱으로 스트리밍 (지연 스트리밍: Delayed Streaming)
+  if (onToken) {
+    for (const auto &token_piece : bestTokens) {
+      onToken(token_piece);
+      // 앱 UI 렌더링(타이핑 효과)을 위해 미세한 딜레이가 필요하다면 아래 주석 해제
+      // std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+  }
+
+  // 7. 트랜스크립트(대화 기록) 업데이트
+  if (state != nullptr) {
+    state->transcript += prompt;
+    state->transcript += bestText;
+  }
+
+  llama_sampler_free(sampler0);
+  llama_sampler_free(sampler1);
+  llama_batch_free(batch);
 
   return true;
 }
