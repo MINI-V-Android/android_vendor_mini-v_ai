@@ -125,9 +125,37 @@ void HandleClient(int clientFd) {
       fprintf(wf, ok ? "OK\n" : "ERROR NPU_LOAD_FAILED\n");
       fflush(wf);
 
+    } else if (cmd.rfind("SET_DECODE_MODE ", 0) == 0) {
+      char modeStr[32] = {0};
+      sscanf(cmd.c_str() + 16, "%31s", modeStr);
+      if (strcasecmp(modeStr, "single") == 0) {
+        gNpuEngine.setGlobalDecodeMode(miniv::ai::DecodeMode::SINGLE);
+        fprintf(wf, "OK (mode set to SINGLE)\n");
+      } else if (strcasecmp(modeStr, "multi") == 0) {
+        gNpuEngine.setGlobalDecodeMode(miniv::ai::DecodeMode::MULTI);
+        fprintf(wf, "OK (mode set to MULTI)\n");
+      } else if (strcasecmp(modeStr, "auto") == 0) {
+        gNpuEngine.setGlobalDecodeMode(miniv::ai::DecodeMode::AUTO);
+        fprintf(wf, "OK (mode set to AUTO/PROP)\n");
+      } else {
+        fprintf(wf, "ERROR INVALID_MODE (use single|multi|auto)\n");
+      }
+      fflush(wf);
+
     } else if (cmd.rfind("NPU_INFER ", 0) == 0) {
-      // NPU_INFER <maxTokens>\n<prompt>\nEND\n  (세션 없음, 단발 질문)
-      int maxTokens = atoi(cmd.c_str() + 10);
+      // NPU_INFER <maxTokens> [mode]\n<prompt>\nEND\n  (세션 없음, 단발 질문)
+      int maxTokens = 0;
+      char modeStr[32] = {0};
+      int parsed = sscanf(cmd.c_str() + 10, "%d %31s", &maxTokens, modeStr);
+
+      miniv::ai::DecodeMode inferMode = miniv::ai::DecodeMode::AUTO;
+      if (parsed >= 2) {
+        if (strcasecmp(modeStr, "single") == 0) {
+          inferMode = miniv::ai::DecodeMode::SINGLE;
+        } else if (strcasecmp(modeStr, "multi") == 0) {
+          inferMode = miniv::ai::DecodeMode::MULTI;
+        }
+      }
 
       std::string prompt;
       char promptLine[4096];
@@ -149,7 +177,7 @@ void HandleClient(int clientFd) {
           /*sessionId=*/-1, prompt, maxTokens, [wf](const std::string &tok) {
             fprintf(wf, "TOKEN %s\n", base64Encode(tok).c_str());
             fflush(wf);
-          });
+          }, inferMode);
 
       fprintf(wf, ok ? "DONE\n" : "ERROR NPU_INFER_FAILED\n");
       fflush(wf);

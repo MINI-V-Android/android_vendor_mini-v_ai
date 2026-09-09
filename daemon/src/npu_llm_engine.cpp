@@ -208,12 +208,44 @@ static std::string common_token_to_piece(const struct llama_model * model, llama
 }
 
 
+#include <android-base/properties.h>
+
+DecodeMode NpuLLMEngine::resolveDecodeMode(DecodeMode requestedMode) const {
+  if (requestedMode != DecodeMode::AUTO) {
+    return requestedMode;
+  }
+  if (mGlobalDecodeMode != DecodeMode::AUTO) {
+    return mGlobalDecodeMode;
+  }
+  const char *envMode = getenv("MINIV_DECODE_MODE");
+  if (envMode != nullptr) {
+    if (strcasecmp(envMode, "single") == 0 || strcmp(envMode, "1") == 0) {
+      return DecodeMode::SINGLE;
+    }
+    if (strcasecmp(envMode, "multi") == 0 || strcmp(envMode, "2") == 0) {
+      return DecodeMode::MULTI;
+    }
+  }
+  std::string prop = android::base::GetProperty("persist.vendor.miniv.decode_mode", "");
+  if (!prop.empty()) {
+    if (strcasecmp(prop.c_str(), "single") == 0 || prop == "1") {
+      return DecodeMode::SINGLE;
+    }
+    if (strcasecmp(prop.c_str(), "multi") == 0 || prop == "2") {
+      return DecodeMode::MULTI;
+    }
+  }
+  return DecodeMode::MULTI; // Default is MULTI (Best-of-N, N=2)
+}
+
 bool NpuLLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens,
-                          TokenCallback onToken) {
+                          TokenCallback onToken, DecodeMode mode) {
   if (!mCtx) return false;
 
-  LOGI("infer() called (N=2 Best-of-N mode): sessionId=%d maxTokens=%d promptLen=%zu",
-       sessionId, maxTokens, prompt.size());
+  DecodeMode resolvedMode = resolveDecodeMode(mode);
+  LOGI("infer() called: sessionId=%d maxTokens=%d promptLen=%zu mode=%s",
+       sessionId, maxTokens, prompt.size(),
+       (resolvedMode == DecodeMode::SINGLE ? "SINGLE (N=1, Real-time)" : "MULTI (N=2, Best-of-N)"));
 
   bool sessionless = (sessionId < 0);  // UDS 단발 질의 — 세션 추적 자체를 안 함
 
@@ -231,7 +263,7 @@ bool NpuLLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens
 
   bool freshStart = sessionless || (sessionId != mActiveSessionId);
 
-  // 초기화
+  // 초기화 및 캐시 준비
   if (freshStart) {
     llama_kv_cache_clear(mCtx);
     mCachePos = 0;
@@ -262,6 +294,18 @@ bool NpuLLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens
          sessionId, mCachePos);
   }
 
+  if (resolvedMode == DecodeMode::SINGLE) {
+    return inferSingle(sessionId, prompt, maxTokens, onToken, state,
+                       sessionless, isBrandNewSession);
+  } else {
+    return inferMulti(sessionId, prompt, maxTokens, onToken, state,
+                      sessionless, isBrandNewSession);
+  }
+}
+
+bool NpuLLMEngine::inferSingle(int sessionId, const std::string &prompt, int maxTokens,
+                               TokenCallback onToken, SessionState *state,
+                               bool sessionless, bool isBrandNewSession) {
   bool addSpecial = sessionless || (!sessionless && isBrandNewSession &&
                                      state->transcript.empty());
   int nPromptTokens =
@@ -271,7 +315,95 @@ bool NpuLLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens
   llama_tokenize(mModel, prompt.c_str(), prompt.size(), promptTokens.data(),
                  nPromptTokens, addSpecial, true);
 
-  LOGI("tokenized: nPromptTokens=%d", nPromptTokens);
+  LOGI("tokenized (SINGLE): nPromptTokens=%d", nPromptTokens);
+  int nPast = mCachePos;
+
+  // Single sequence 배치 할당
+  llama_batch batch = llama_batch_init(std::max(2048, nPromptTokens + 64), 0, 1);
+
+  // 1. 프롬프트 Prefill 연산 (seq_id = 0)
+  common_batch_clear(batch);
+  for (int i = 0; i < nPromptTokens; ++i) {
+    bool is_last = (i == nPromptTokens - 1);
+    common_batch_add(batch, promptTokens[i], nPast + i, { 0 }, is_last);
+  }
+
+  if (llama_decode(mCtx, batch) != 0) {
+    LOGE("Single mode Prefill decode failed");
+    llama_batch_free(batch);
+    return false;
+  }
+  llama_synchronize(mCtx);
+
+  // 2. 단일 샘플러 구성
+  llama_sampler *sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
+  llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40));
+  llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.9f, 1));
+  llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.7f));
+  llama_sampler_chain_add(sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
+
+  // 3. 실시간 토큰 스트리밍 디코딩 루프
+  std::string generatedText;
+  int generatedCount = 0;
+  int i_batch = nPromptTokens - 1;
+  int curPos = nPast + nPromptTokens;
+
+  for (int step = 0; step < maxTokens; ++step) {
+    llama_token id = llama_sampler_sample(sampler, mCtx, i_batch);
+    if (llama_token_is_eog(mModel, id)) {
+      break;
+    }
+
+    std::string piece = common_token_to_piece(mModel, id);
+    generatedText += piece;
+    generatedCount++;
+
+    // 즉시 실시간 스트리밍 콜백 호출
+    if (onToken) {
+      onToken(piece);
+    }
+
+    common_batch_clear(batch);
+    common_batch_add(batch, id, curPos, { 0 }, true);
+    i_batch = 0;
+
+    if (llama_decode(mCtx, batch) != 0) {
+      LOGE("Single decode loop failed at step %d", step);
+      break;
+    }
+    llama_synchronize(mCtx);
+
+    curPos++;
+  }
+
+  mCachePos += nPromptTokens + generatedCount;
+
+  // 4. 트랜스크립트 업데이트
+  if (state != nullptr) {
+    state->transcript += prompt;
+    state->transcript += generatedText;
+  }
+
+  llama_sampler_free(sampler);
+  llama_batch_free(batch);
+
+  LOGI("Single mode infer done: generated %d tokens", generatedCount);
+  return true;
+}
+
+bool NpuLLMEngine::inferMulti(int sessionId, const std::string &prompt, int maxTokens,
+                              TokenCallback onToken, SessionState *state,
+                              bool sessionless, bool isBrandNewSession) {
+  bool addSpecial = sessionless || (!sessionless && isBrandNewSession &&
+                                     state->transcript.empty());
+  int nPromptTokens =
+      -llama_tokenize(mModel, prompt.c_str(), prompt.size(), nullptr, 0,
+                       addSpecial, true);
+  std::vector<llama_token> promptTokens(nPromptTokens);
+  llama_tokenize(mModel, prompt.c_str(), prompt.size(), promptTokens.data(),
+                 nPromptTokens, addSpecial, true);
+
+  LOGI("tokenized (MULTI): nPromptTokens=%d", nPromptTokens);
   {   
     std::string tokStr;
     for (int i = 0; i < nPromptTokens; ++i) {
@@ -300,7 +432,6 @@ bool NpuLLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens
   llama_synchronize(mCtx);
 
   // 2. KV 캐시 복제 (seq_id 0의 상태를 seq_id 1로 복사)
-  // 무거운 프롬프트 연산을 1번만 하고 상태를 공유합니다.
   llama_kv_cache_seq_cp(mCtx, 0, 1, -1, -1);
 
   // 3. 샘플러 독립 구성 (다양성 확보 - 서로 다른 Seed 부여)
@@ -371,7 +502,7 @@ bool NpuLLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens
     curPos++;
   }
 
-  // 5. 호스트 CPU 기반 평가 (더미 랜덤 / 룰베이스)
+  // 5. 호스트 CPU 기반 평가 (룰베이스)
   int score0 = miniv::ai::evaluate_response(text0);
   int score1 = miniv::ai::evaluate_response(text1);
 
@@ -397,16 +528,14 @@ bool NpuLLMEngine::infer(int sessionId, const std::string &prompt, int maxTokens
 
   mCachePos += nPromptTokens + bestTokenCount;
 
-  // 6. 승리한 시퀀스의 토큰만 앱으로 스트리밍 (지연 스트리밍: Delayed Streaming)
+  // 6. 승리한 시퀀스의 토큰만 스트리밍 (지연 스트리밍: Delayed Streaming)
   if (onToken) {
     for (const auto &token_piece : bestTokens) {
       onToken(token_piece);
-      // 앱 UI 렌더링(타이핑 효과)을 위해 미세한 딜레이가 필요하다면 아래 주석 해제
-      // std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
   }
 
-  // 7. 트랜스크립트(대화 기록) 업데이트
+  // 7. 트랜스크립트 업데이트
   if (state != nullptr) {
     state->transcript += prompt;
     state->transcript += bestText;

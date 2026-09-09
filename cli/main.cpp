@@ -119,17 +119,26 @@ int main(int argc, char **argv) {
                        " " + argv[4] + " " + argv[5] + "\n";
     SendAndReadLine(fd, cmd);
 
+  } else if (argc >= 3 && strcmp(argv[1], "set_mode") == 0) {
+    // 사용법: ai_daemon_cli set_mode <multi|single|auto>
+    SendAndReadLine(fd, std::string("SET_DECODE_MODE ") + argv[2] + "\n");
+
   } else if (argc >= 3 && strcmp(argv[1], "npu_infer") == 0) {
-    // 사용법: ai_daemon_cli npu_infer "<prompt>" <maxTokens>
+    // 사용법: ai_daemon_cli npu_infer "<prompt>" <maxTokens> [multi|single]
     if (argc < 4) {
-      fprintf(stderr, "usage: ai_daemon_cli npu_infer <prompt> <maxTokens>\n");
+      fprintf(stderr, "usage: ai_daemon_cli npu_infer <prompt> <maxTokens> [multi|single]\n");
       close(fd);
       return 1;
     }
     std::string prompt = argv[2];
     int maxTokens = atoi(argv[3]);
+    std::string mode = (argc >= 5) ? argv[4] : "";
 
-    dprintf(fd, "NPU_INFER %d\n%s\nEND\n", maxTokens, prompt.c_str());
+    if (!mode.empty()) {
+      dprintf(fd, "NPU_INFER %d %s\n%s\nEND\n", maxTokens, mode.c_str(), prompt.c_str());
+    } else {
+      dprintf(fd, "NPU_INFER %d\n%s\nEND\n", maxTokens, prompt.c_str());
+    }
 
     FILE *rf = fdopen(fd, "r");
     if (!rf) {

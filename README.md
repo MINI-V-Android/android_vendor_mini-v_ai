@@ -111,13 +111,16 @@ ai_daemon_cli npu_load /data/local/tmp/llama.cpp/qwen2.5-1.5b.iq4_nl+q8_0-hmx.gg
 ```
 
 ### 2) NPU 질의 및 생성 (`npu_infer`)
-프롬프트를 전달하여 N=2 병렬 생성 및 룰 평가를 거친 최적의 텍스트를 터미널로 실시간 스트리밍 출력합니다.
+프롬프트를 전달하여 NPU 추론 결과를 터미널로 실시간 스트리밍 출력합니다. (단일/다중 모드 옵션 지정 가능)
 
 ```bash
-ai_daemon_cli npu_infer "<prompt>" <maxTokens>
+ai_daemon_cli npu_infer "<prompt>" <maxTokens> [multi|single]
 
-# 예시:
+# 예시 1: 기본 모드(Default: Multi Best-of-N)
 ai_daemon_cli npu_infer "대한민국의 수도는 어디인가요?" 256
+
+# 예시 2: Single 모드 강제 지정 (N=1, Zero-latency 즉시 스트리밍)
+ai_daemon_cli npu_infer "대한민국의 수도는 어디인가요?" 256 single
 ```
 
 **출력 예시:**
@@ -126,7 +129,31 @@ ai_daemon_cli npu_infer "대한민국의 수도는 어디인가요?" 256
 [DONE]
 ```
 
-### 3) 헬로 테스트 (`HELLO`)
+### 3) 디코딩 모드 동적 전환 (`set_mode` / `setprop`)
+N=2 다중 디코딩(Best-of-N)과 N=1 단일 디코딩(Single)을 데몬 재시작 없이 자유롭게 전환할 수 있습니다.
+
+**방법 A. CLI 명령어 사용:**
+```bash
+# 단일 디코딩(실시간 즉시 스트리밍)으로 전환
+ai_daemon_cli set_mode single
+
+# 다중 디코딩(N=2 Best-of-N 선별)으로 전환
+ai_daemon_cli set_mode multi
+
+# 시스템 프로퍼티/환경변수 자동 감지 모드로 복귀
+ai_daemon_cli set_mode auto
+```
+
+**방법 B. Android 시스템 프로퍼티(`setprop`) 사용:**
+```bash
+# 데몬/앱 실행 중 즉시 Single 모드로 전환
+adb shell setprop persist.vendor.miniv.decode_mode single
+
+# Multi 모드로 복귀
+adb shell setprop persist.vendor.miniv.decode_mode multi
+```
+
+### 4) 헬로 테스트 (`HELLO`)
 인자 없이 실행하거나 `HELLO` 명령을 보내 데몬 연결 상태를 확인합니다.
 
 ```bash
