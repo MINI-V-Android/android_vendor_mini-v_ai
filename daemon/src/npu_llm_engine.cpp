@@ -5,9 +5,9 @@
 #include "ggml-htp.h"
 #include "ggml-alloc.h"
 #include <cstring>
-// #include <dlfcn.h>
-
 #include <android/log.h>
+#include <android-base/properties.h>
+#include <cutils/properties.h>
 #include <vector>
 #include <chrono>
 #include <thread>
@@ -208,8 +208,6 @@ static std::string common_token_to_piece(const struct llama_model * model, llama
 }
 
 
-#include <android-base/properties.h>
-
 DecodeMode NpuLLMEngine::resolveDecodeMode(DecodeMode requestedMode) const {
   if (requestedMode != DecodeMode::AUTO) {
     return requestedMode;
@@ -226,12 +224,13 @@ DecodeMode NpuLLMEngine::resolveDecodeMode(DecodeMode requestedMode) const {
       return DecodeMode::MULTI;
     }
   }
-  std::string prop = android::base::GetProperty("persist.vendor.miniv.decode_mode", "");
-  if (!prop.empty()) {
-    if (strcasecmp(prop.c_str(), "single") == 0 || prop == "1") {
+  char propVal[PROPERTY_VALUE_MAX] = {0};
+  property_get("persist.vendor.miniv.decode_mode", propVal, "");
+  if (propVal[0] != '\0') {
+    if (strcasecmp(propVal, "single") == 0 || strcmp(propVal, "1") == 0) {
       return DecodeMode::SINGLE;
     }
-    if (strcasecmp(prop.c_str(), "multi") == 0 || prop == "2") {
+    if (strcasecmp(propVal, "multi") == 0 || strcmp(propVal, "2") == 0) {
       return DecodeMode::MULTI;
     }
   }

@@ -9,6 +9,9 @@ cc_library_shared {
     local_include_dirs: ["include"],
     include_dirs: ["vendor/mini-v/ai/prebuilts/npu/include"],
     shared_libs: [
+        "libbase",
+        "liblog",
+        "libcutils",
         "libllama-npu-prebuilt-linked",
         "libggml-npu-prebuilt-linked",
         "libggml-base-npu-prebuilt-linked",
